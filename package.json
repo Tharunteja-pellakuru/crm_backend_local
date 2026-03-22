@@ -1,0 +1,28 @@
+{
+  "name": "your-app-name",          
+  "version": "1.0.0",               
+  "description": "Your backend API",
+  "main": "server.js",              
+  "type": "commonjs",                
+  "scripts": {
+    "start": "node server.js"       
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.44.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "groq-sdk": "^1.1.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "mysql2": "^3.19.1",
+    "nodemon": "^3.1.14",
+    "openai": "^6.27.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {             
+    "nodemon": "^3.1.14"
+  }
+}
