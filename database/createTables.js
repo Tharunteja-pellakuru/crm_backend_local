@@ -115,7 +115,7 @@ const createFollowupSummaryTable = () => {
 const createAiModelsTable = () => {
   return runQuery(
     `CREATE TABLE IF NOT EXISTS crm_tbl_aiModels (
-      id AUTO_INCREMENT PRIMARY KEY,
+      id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(150) NOT NULL,
       provider VARCHAR(100),
       model_id VARCHAR(150),
