@@ -72,10 +72,8 @@ const createAdminUser = async (req, res) => {
 
     const userUUID = uuidv4();
 
-    const hashedPassword =
-      password === ""
-        ? await bcrypt.hash("Password@123", 10)
-        : await bcrypt.hash(password, 10);
+    const finalPassword = password || "Password@123";
+    const hashedPassword = await bcrypt.hash(finalPassword, 10);
 
     const query = `
       INSERT INTO crm_tbl_admins 
