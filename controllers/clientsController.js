@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
+const { validateRequest } = require("../middleware/validation");
 
 const createClient = (req, res) => {
   const {
@@ -11,16 +12,19 @@ const createClient = (req, res) => {
     client_status,
     lead_id,
   } = req.body;
-  if (
-    !organisation_name ||
-    !client_name ||
-    !client_country ||
-    !client_state ||
-    !client_currency ||
-    !client_status ||
-    !lead_id
-  ) {
-    return res.status(400).json({ message: "All fields are required" });
+
+  const error = validateRequest(req.body, {
+    organisation_name: { required: true },
+    client_name: { required: true },
+    client_country: { required: true },
+    client_state: { required: true },
+    client_currency: { required: true },
+    client_status: { required: true, enum: ['Active', 'Inactive'] },
+    lead_id: { required: true }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
   }
   const uuid = uuidv4();
   const query =
@@ -85,6 +89,19 @@ const updateClient = (req, res) => {
     client_currency,
     client_status,
   } = req.body;
+
+  const error = validateRequest(req.body, {
+    organisation_name: { required: true },
+    client_name: { required: true },
+    client_country: { required: true },
+    client_state: { required: true },
+    client_currency: { required: true },
+    client_status: { required: true, enum: ['Active', 'Inactive'] }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
 
   const query = `UPDATE crm_tbl_clients SET 
     organisation_name = ?, 

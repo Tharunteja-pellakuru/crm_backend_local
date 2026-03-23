@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
+const { validateRequest } = require("../middleware/validation");
 
 // Create new followup
 const createNewFollowup = async (req, res) => {
@@ -14,6 +15,19 @@ const createNewFollowup = async (req, res) => {
     priority,
     projectId,
   } = req.body;
+
+  const error = validateRequest(req.body, {
+    clientId: { required: true },
+    title: { required: true, minLength: 2 },
+    followup_date: { required: true },
+    followup_mode: { required: true, enum: ['Call', 'Email', 'Whatsapp', 'Meeting'] },
+    followup_status: { required: true, enum: ['Pending', 'Completed', 'Reschedule', 'Cancelled'] },
+    priority: { required: true, enum: ['High', 'Medium', 'Low'] }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
 
   try {
     const uuid = uuidv4();
@@ -155,6 +169,18 @@ const updateFollowup = async (req, res) => {
     projectId,
   } = req.body;
 
+  const error = validateRequest(req.body, {
+    title: { required: true, minLength: 2 },
+    followup_date: { required: true },
+    followup_mode: { required: true, enum: ['Call', 'Email', 'Whatsapp', 'Meeting'] },
+    followup_status: { required: true, enum: ['Pending', 'Completed', 'Reschedule', 'Cancelled'] },
+    priority: { required: true, enum: ['High', 'Medium', 'Low'] }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
+
   const query = `
     UPDATE crm_tbl_followups 
     SET followup_title = ?, followup_description = ?, followup_datetime = ?, 
@@ -281,6 +307,14 @@ const deleteFollowup = async (req, res) => {
 const toggleFollowupStatus = async (req, res) => {
   const { id } = req.params;
   const { status, brief, completed_at, completed_by } = req.body;
+
+  const error = validateRequest(req.body, {
+    status: { required: true, enum: ['Pending', 'Completed', 'Reschedule', 'Cancelled'] }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
 
   const capitalize = (s) => {
     if (!s) return s;

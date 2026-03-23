@@ -1,5 +1,6 @@
 const db = require("../config/db.js");
 const { v4: uuidv4 } = require("uuid");
+const { validateRequest } = require("../middleware/validation");
 
 const createLead = (req, res) => {
   try {
@@ -16,6 +17,20 @@ const createLead = (req, res) => {
       country,
       enquiry_id,
     } = req.body;
+
+    // Validation
+    const error = validateRequest(req.body, {
+      full_name: { required: true, minLength: 2 },
+      lead_category: { required: true }
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+    
+    if (!email && !phone_number) {
+      return res.status(400).json({ message: "Either email or phone number must be provided." });
+    }
 
     const query = `INSERT INTO crm_tbl_leads (uuid, full_name,
       phone_number,

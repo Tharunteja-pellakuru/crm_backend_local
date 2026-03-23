@@ -1,5 +1,6 @@
 const db = require("../config/db.js");
 const { v4: uuidv4 } = require("uuid");
+const { validateRequest } = require("../middleware/validation");
 
 const getEnquiries = (req, res) => {
   try {
@@ -29,6 +30,17 @@ const addEnquiry = (req, res) => {
       status = 'New',
       remarks = ''
     } = req.body;
+    
+    // Validation
+    const error = validateRequest(req.body, {
+      full_name: { required: true, minLength: 2 },
+      email: { required: true, pattern: /^\S+@\S+\.\S+$/ },
+      phone_number: { required: true, minLength: 10 }
+    });
+    
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
 
     const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, message, status, remarks) VALUES (?,?,?,?,?,?,?,?)`;
 

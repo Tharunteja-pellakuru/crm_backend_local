@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
+const { validateRequest } = require("../middleware/validation");
 
 // Helper to safely format a MySQL DATE/DATETIME value to YYYY-MM-DD string.
 // MySQL driver returns JS Date objects which get serialized as UTC,
@@ -41,18 +42,23 @@ const createProject = (req, res) => {
 
   const scope_document = req.file ? req.file.filename : req.body.scope_document;
 
-  if (
-    !project_name ||
-    !project_description ||
-    !project_category ||
-    !project_status ||
-    !project_priority ||
-    !project_budget ||
-    !onboarding_date ||
-    !deadline_date ||
-    !client_id
-  ) {
-    return res.status(400).json({ message: "All fields are required" });
+  const error = validateRequest(req.body, {
+    project_name: { required: true, minLength: 2 },
+    project_category: { required: true },
+    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
+    project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
+    project_budget: { required: true, type: 'number' },
+    onboarding_date: { required: true },
+    deadline_date: { required: true },
+    client_id: { required: true }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
+  
+  if (new Date(deadline_date) <= new Date(onboarding_date)) {
+    return res.status(400).json({ message: "Deadline must be after onboarding date." });
   }
   const uuid = uuidv4();
   const query =
@@ -112,6 +118,24 @@ const updateProject = (req, res) => {
     onboarding_date,
     deadline_date,
   } = req.body;
+
+  const error = validateRequest(req.body, {
+    project_name: { required: true, minLength: 2 },
+    project_category: { required: true },
+    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
+    project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
+    project_budget: { required: true, type: 'number' },
+    onboarding_date: { required: true },
+    deadline_date: { required: true }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
+  }
+  
+  if (onboarding_date && deadline_date && new Date(deadline_date) <= new Date(onboarding_date)) {
+    return res.status(400).json({ message: "Deadline must be after onboarding date." });
+  }
 
   const scope_document = req.file ? req.file.filename : req.body.scope_document;
 
@@ -187,8 +211,12 @@ const updateProjectStatus = (req, res) => {
   const { id } = req.params;
   const { project_status } = req.body;
 
-  if (!project_status) {
-    return res.status(400).json({ message: "Project status is required" });
+  const error = validateRequest(req.body, {
+    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] }
+  });
+
+  if (error) {
+    return res.status(400).json({ message: error.message });
   }
 
   const query =
