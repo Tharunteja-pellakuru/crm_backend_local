@@ -211,7 +211,8 @@ const updatePassword = async (req, res) => {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
       // Update password in database
-      const updateQuery = "UPDATE crm_tbl_admins SET password = ? WHERE uuid = ?";
+      const updateQuery =
+        "UPDATE crm_tbl_admins SET password = ? WHERE uuid = ?";
       db.query(updateQuery, [hashedPassword, uuid], (updateErr) => {
         if (updateErr) {
           console.error(updateErr);

@@ -3,21 +3,21 @@ const { v4: uuidv4 } = require("uuid");
 
 // Create new followup
 const createNewFollowup = async (req, res) => {
-    const {
-      clientId,
-      title,
-      description,
-      followup_date,
-      followup_mode,
-      followup_status,
-      follow_brief,
-      priority,
-      projectId,
-    } = req.body;
-  
-    try {
-      const uuid = uuidv4();
-      const query = `
+  const {
+    clientId,
+    title,
+    description,
+    followup_date,
+    followup_mode,
+    followup_status,
+    follow_brief,
+    priority,
+    projectId,
+  } = req.body;
+
+  try {
+    const uuid = uuidv4();
+    const query = `
         INSERT INTO crm_tbl_followups (
           uuid, followup_title, followup_description, followup_datetime, 
           followup_mode, followup_status, followup_priority, lead_id, project_id
@@ -52,7 +52,7 @@ const createNewFollowup = async (req, res) => {
           console.error("Error creating followup:", err);
           return res.status(500).json({ message: "Database error" });
         }
-        
+
         const followupId = result.insertId;
 
         // If status is "Completed", also update/insert into crm_tbl_followUpSummary
@@ -62,8 +62,11 @@ const createNewFollowup = async (req, res) => {
             INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
             VALUES (?, ?, ?, ?, ?, ?)
           `;
-          
-          const formattedCompletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+          const formattedCompletedAt = new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace("T", " ");
 
           db.query(
             querySummary,
@@ -73,17 +76,20 @@ const createNewFollowup = async (req, res) => {
               projectId || null,
               follow_brief || "",
               formattedCompletedAt,
-              "System"
+              "System",
             ],
             (summaryErr) => {
               if (summaryErr) {
-                console.error("Error saving initial followup summary:", summaryErr);
+                console.error(
+                  "Error saving initial followup summary:",
+                  summaryErr,
+                );
               }
               res.status(201).json({
                 message: "Followup created and summary saved",
                 followup: { id: followupId, uuid, ...req.body },
               });
-            }
+            },
           );
         } else {
           res.status(201).json({
@@ -91,7 +97,7 @@ const createNewFollowup = async (req, res) => {
             followup: { id: followupId, uuid, ...req.body },
           });
         }
-      }
+      },
     );
   } catch (error) {
     console.error("Error in createNewFollowup:", error);
@@ -113,7 +119,7 @@ const getAllFollowups = async (req, res) => {
       console.error("Error fetching followups:", err);
       return res.status(500).json({ message: "Database error" });
     }
-    const transformedResults = results.map(f => ({
+    const transformedResults = results.map((f) => ({
       id: f.id,
       uuid: f.uuid,
       clientId: f.lead_id,
@@ -127,7 +133,7 @@ const getAllFollowups = async (req, res) => {
       priority: f.followup_priority,
       follow_brief: f.follow_brief,
       completed_at: f.completed_at,
-      completed_by: f.completed_by
+      completed_by: f.completed_by,
     }));
     res.status(200).json(transformedResults);
   });
@@ -186,7 +192,8 @@ const updateFollowup = async (req, res) => {
 
       if (formattedStatus === "Completed" && follow_brief !== undefined) {
         // DELETE then INSERT to avoid duplication issues
-        const deleteSummaryQuery = "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
+        const deleteSummaryQuery =
+          "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
         db.query(deleteSummaryQuery, [id], (deleteErr) => {
           if (deleteErr) {
             console.error("Error deleting old summary in edit:", deleteErr);
@@ -214,34 +221,46 @@ const updateFollowup = async (req, res) => {
             ],
             (summaryErr) => {
               if (summaryErr) {
-                console.error("Error saving followup summary in edit:", summaryErr);
+                console.error(
+                  "Error saving followup summary in edit:",
+                  summaryErr,
+                );
               }
-              res.status(200).json({ message: "Followup updated successfully" });
-            }
+              res
+                .status(200)
+                .json({ message: "Followup updated successfully" });
+            },
           );
         });
       } else {
-        const deleteSummaryQuery = "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
+        const deleteSummaryQuery =
+          "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
         db.query(deleteSummaryQuery, [id], (summaryErr) => {
           if (summaryErr) {
-            console.error("Error deleting old followup summary on status change:", summaryErr);
+            console.error(
+              "Error deleting old followup summary on status change:",
+              summaryErr,
+            );
           }
           res.status(200).json({ message: "Followup updated successfully" });
         });
       }
-    }
+    },
   );
 };
 
 const deleteFollowup = async (req, res) => {
   const { id } = req.params;
-  
+
   // First delete associated summary if it exists
-  const deleteSummaryQuery = "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
+  const deleteSummaryQuery =
+    "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
   db.query(deleteSummaryQuery, [id], (summaryErr) => {
     if (summaryErr) {
       console.error("Error deleting followup summary:", summaryErr);
-      return res.status(500).json({ message: "Database error while deleting summary" });
+      return res
+        .status(500)
+        .json({ message: "Database error while deleting summary" });
     }
 
     // Then delete the followup itself
@@ -251,7 +270,9 @@ const deleteFollowup = async (req, res) => {
         console.error("Error deleting followup:", err);
         return res.status(500).json({ message: "Database error" });
       }
-      res.status(200).json({ message: "Followup and related summary deleted successfully" });
+      res
+        .status(200)
+        .json({ message: "Followup and related summary deleted successfully" });
     });
   });
 };
@@ -270,7 +291,8 @@ const toggleFollowupStatus = async (req, res) => {
   const formattedStatus = capitalize(status);
 
   // Use a transaction or sequential execution
-  const queryUpdate = "UPDATE crm_tbl_followups SET followup_status = ? WHERE id = ?";
+  const queryUpdate =
+    "UPDATE crm_tbl_followups SET followup_status = ? WHERE id = ?";
   db.query(queryUpdate, [formattedStatus, id], (err, result) => {
     if (err) {
       console.error("Error toggling followup status:", err);
@@ -280,10 +302,11 @@ const toggleFollowupStatus = async (req, res) => {
     // If status is "Completed", also update/insert into crm_tbl_followUpSummary
     if (formattedStatus === "Completed") {
       // DELETE then INSERT to avoid duplication issues
-      const deleteSummaryQuery = "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
+      const deleteSummaryQuery =
+        "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
       db.query(deleteSummaryQuery, [id], (deleteErr) => {
         if (deleteErr) {
-           console.error("Error deleting old summary in toggle:", deleteErr);
+          console.error("Error deleting old summary in toggle:", deleteErr);
         }
 
         const summaryUuid = uuidv4();
@@ -299,22 +322,37 @@ const toggleFollowupStatus = async (req, res) => {
             id,
             id,
             brief || "",
-            completed_at ? completed_at.replace('T', ' ').slice(0, 19) : new Date().toLocaleString('sv-SE').replace(' ', 'T').slice(0, 19).replace('T', ' '),
+            completed_at
+              ? completed_at.replace("T", " ").slice(0, 19)
+              : new Date()
+                  .toLocaleString("sv-SE")
+                  .replace(" ", "T")
+                  .slice(0, 19)
+                  .replace("T", " "),
             completed_by || "System",
           ],
           (summaryErr) => {
             if (summaryErr) {
-              console.error("Error saving followup summary in toggle:", summaryErr);
+              console.error(
+                "Error saving followup summary in toggle:",
+                summaryErr,
+              );
             }
-            res.status(200).json({ message: "Followup status and summary updated" });
-          }
+            res
+              .status(200)
+              .json({ message: "Followup status and summary updated" });
+          },
         );
       });
     } else {
-      const deleteSummaryQuery = "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
+      const deleteSummaryQuery =
+        "DELETE FROM crm_tbl_followUpSummary WHERE followup_id = ?";
       db.query(deleteSummaryQuery, [id], (summaryErr) => {
         if (summaryErr) {
-          console.error("Error deleting old followup summary on status toggle:", summaryErr);
+          console.error(
+            "Error deleting old followup summary on status toggle:",
+            summaryErr,
+          );
         }
         res.status(200).json({ message: "Followup status updated" });
       });
@@ -325,7 +363,7 @@ const toggleFollowupStatus = async (req, res) => {
 // Get followups for a specific client (including lead history)
 const getClientFollowups = async (req, res) => {
   const { clientId } = req.params;
-  
+
   if (!clientId) {
     return res.status(400).json({ message: "Client ID is required" });
   }
@@ -346,7 +384,7 @@ const getClientFollowups = async (req, res) => {
       return res.status(500).json({ message: "Database error" });
     }
 
-    const transformedResults = results.map(f => ({
+    const transformedResults = results.map((f) => ({
       id: f.id,
       uuid: f.uuid,
       clientId: f.lead_id,
@@ -360,7 +398,7 @@ const getClientFollowups = async (req, res) => {
       priority: f.followup_priority,
       follow_brief: f.follow_brief,
       completed_at: f.completed_at,
-      completed_by: f.completed_by
+      completed_by: f.completed_by,
     }));
 
     res.status(200).json(transformedResults);
@@ -373,5 +411,5 @@ module.exports = {
   updateFollowup,
   deleteFollowup,
   toggleFollowupStatus,
-  getClientFollowups
+  getClientFollowups,
 };

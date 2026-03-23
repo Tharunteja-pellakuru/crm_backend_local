@@ -26,7 +26,6 @@ const formatProjectDates = (project) => {
   };
 };
 
-
 const createProject = (req, res) => {
   const {
     project_name,
@@ -78,17 +77,24 @@ const createProject = (req, res) => {
         console.log(err);
         return res.status(500).json({ message: "Failed to create project" });
       }
-      
+
       const projectId = result.insertId;
       db.query(
         "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
         [projectId],
         (err, projects) => {
           if (err) {
-            return res.status(201).json({ message: "Project created successfully", uuid });
+            return res
+              .status(201)
+              .json({ message: "Project created successfully", uuid });
           }
-          res.status(201).json({ message: "Project created successfully", project: formatProjectDates(projects[0]) });
-        }
+          res
+            .status(201)
+            .json({
+              message: "Project created successfully",
+              project: formatProjectDates(projects[0]),
+            });
+        },
       );
     },
   );
@@ -118,7 +124,7 @@ const updateProject = (req, res) => {
     project_budget = ?, 
     onboarding_date = ?, 
     deadline_date = ?`;
-  
+
   const queryParams = [
     project_name,
     project_description,
@@ -146,20 +152,22 @@ const updateProject = (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
     }
-    
+
     // Fetch and return the updated project
     db.query(
       "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
       [id],
       (err, projects) => {
         if (err) {
-          return res.status(200).json({ message: "Project Updated Successfully!" });
+          return res
+            .status(200)
+            .json({ message: "Project Updated Successfully!" });
         }
-        res.status(200).json({ 
-          message: "Project Updated Successfully!", 
-          project: formatProjectDates(projects[0]) 
+        res.status(200).json({
+          message: "Project Updated Successfully!",
+          project: formatProjectDates(projects[0]),
         });
-      }
+      },
     );
   });
 };
@@ -183,11 +191,14 @@ const updateProjectStatus = (req, res) => {
     return res.status(400).json({ message: "Project status is required" });
   }
 
-  const query = "UPDATE crm_tbl_projects SET project_status = ? WHERE project_id = ?";
+  const query =
+    "UPDATE crm_tbl_projects SET project_status = ? WHERE project_id = ?";
   db.query(query, [project_status, id], (err, result) => {
     if (err) {
       console.error("Database error updating project status:", err.message);
-      return res.status(500).json({ message: "Failed to update project status" });
+      return res
+        .status(500)
+        .json({ message: "Failed to update project status" });
     }
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
@@ -200,23 +211,34 @@ const deleteProject = (req, res) => {
   const { id } = req.params;
 
   // 1. Delete associated follow-up summaries
-  const deleteSummariesQuery = "DELETE FROM crm_tbl_followUpSummary WHERE project_id = ?";
+  const deleteSummariesQuery =
+    "DELETE FROM crm_tbl_followUpSummary WHERE project_id = ?";
   db.query(deleteSummariesQuery, [id], (summaryErr) => {
     if (summaryErr) {
-      console.error("Error deleting related follow-up summaries:", summaryErr.message);
+      console.error(
+        "Error deleting related follow-up summaries:",
+        summaryErr.message,
+      );
       // We continue to try deleting follow-ups even if summaries fail
     }
 
     // 2. Delete associated follow-ups
-    const deleteFollowupsQuery = "DELETE FROM crm_tbl_followups WHERE project_id = ?";
+    const deleteFollowupsQuery =
+      "DELETE FROM crm_tbl_followups WHERE project_id = ?";
     db.query(deleteFollowupsQuery, [id], (followupErr) => {
       if (followupErr) {
-        console.error("Error deleting related follow-ups:", followupErr.message);
-        return res.status(500).json({ message: "Failed to delete related follow-ups" });
+        console.error(
+          "Error deleting related follow-ups:",
+          followupErr.message,
+        );
+        return res
+          .status(500)
+          .json({ message: "Failed to delete related follow-ups" });
       }
 
       // 3. Finally delete the project itself
-      const deleteProjectQuery = "DELETE FROM crm_tbl_projects WHERE project_id = ?";
+      const deleteProjectQuery =
+        "DELETE FROM crm_tbl_projects WHERE project_id = ?";
       db.query(deleteProjectQuery, [id], (err, result) => {
         if (err) {
           console.error("Database error deleting project:", err.message);
@@ -225,10 +247,20 @@ const deleteProject = (req, res) => {
         if (result.affectedRows === 0) {
           return res.status(404).json({ message: "Project Not Found!" });
         }
-        res.status(200).json({ message: "Project and all related data deleted successfully!" });
+        res
+          .status(200)
+          .json({
+            message: "Project and all related data deleted successfully!",
+          });
       });
     });
   });
 };
 
-module.exports = { createProject, getProjects, updateProject, updateProjectStatus, deleteProject };
+module.exports = {
+  createProject,
+  getProjects,
+  updateProject,
+  updateProjectStatus,
+  deleteProject,
+};

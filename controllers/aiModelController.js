@@ -66,63 +66,69 @@ const updateAiModel = async (req, res) => {
     const { name, provider, modelId, apiKey, isDefault } = req.body;
 
     // Check if model exists
-    db.query("SELECT * FROM crm_tbl_aiModels WHERE id = ?", [id], (err, results) => {
-      if (err) {
-        console.error("Error finding AI model:", err);
-        return res.status(500).json({ message: "Database error" });
-      }
-
-      if (results.length === 0) {
-        return res.status(404).json({ message: "AI model not found" });
-      }
-
-      // If setting as default, unset other defaults
-      if (isDefault) {
-        db.query("UPDATE crm_tbl_aiModels SET is_default = FALSE", (err) => {
-          if (err) console.error("Error unsetting defaults:", err);
-        });
-      }
-
-      // Build update query dynamically
-      let updates = [];
-      let values = [];
-
-      if (name) {
-        updates.push("name = ?");
-        values.push(name);
-      }
-      if (provider) {
-        updates.push("provider = ?");
-        values.push(provider);
-      }
-      if (modelId) {
-        updates.push("model_id = ?");
-        values.push(modelId);
-      }
-      if (apiKey) {
-        updates.push("api_key = ?");
-        values.push(apiKey);
-      }
-      if (isDefault !== undefined) {
-        updates.push("is_default = ?");
-        values.push(isDefault);
-      }
-
-      if (updates.length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
-      }
-
-      values.push(id);
-      const query = `UPDATE crm_tbl_aiModels SET ${updates.join(", ")} WHERE id = ?`;
-
-      db.query(query, values, (err) => {
+    db.query(
+      "SELECT * FROM crm_tbl_aiModels WHERE id = ?",
+      [id],
+      (err, results) => {
         if (err) {
-          console.error("Error updating AI model:", err);
-          return res.status(500).json({ message: "Failed to update AI model" });
+          console.error("Error finding AI model:", err);
+          return res.status(500).json({ message: "Database error" });
         }
-        res.json({ message: "AI model updated successfully" });
-      });
-    });
+
+        if (results.length === 0) {
+          return res.status(404).json({ message: "AI model not found" });
+        }
+
+        // If setting as default, unset other defaults
+        if (isDefault) {
+          db.query("UPDATE crm_tbl_aiModels SET is_default = FALSE", (err) => {
+            if (err) console.error("Error unsetting defaults:", err);
+          });
+        }
+
+        // Build update query dynamically
+        let updates = [];
+        let values = [];
+
+        if (name) {
+          updates.push("name = ?");
+          values.push(name);
+        }
+        if (provider) {
+          updates.push("provider = ?");
+          values.push(provider);
+        }
+        if (modelId) {
+          updates.push("model_id = ?");
+          values.push(modelId);
+        }
+        if (apiKey) {
+          updates.push("api_key = ?");
+          values.push(apiKey);
+        }
+        if (isDefault !== undefined) {
+          updates.push("is_default = ?");
+          values.push(isDefault);
+        }
+
+        if (updates.length === 0) {
+          return res.status(400).json({ message: "No fields to update" });
+        }
+
+        values.push(id);
+        const query = `UPDATE crm_tbl_aiModels SET ${updates.join(", ")} WHERE id = ?`;
+
+        db.query(query, values, (err) => {
+          if (err) {
+            console.error("Error updating AI model:", err);
+            return res
+              .status(500)
+              .json({ message: "Failed to update AI model" });
+          }
+          res.json({ message: "AI model updated successfully" });
+        });
+      },
+    );
   } catch (error) {
     console.error("Update AI model error:", error);
     res.status(500).json({ message: "Server error" });
@@ -134,18 +140,22 @@ const deleteAiModel = async (req, res) => {
   try {
     const { id } = req.params;
 
-    db.query("DELETE FROM crm_tbl_aiModels WHERE id = ?", [id], (err, result) => {
-      if (err) {
-        console.error("Error deleting AI model:", err);
-        return res.status(500).json({ message: "Failed to delete AI model" });
-      }
+    db.query(
+      "DELETE FROM crm_tbl_aiModels WHERE id = ?",
+      [id],
+      (err, result) => {
+        if (err) {
+          console.error("Error deleting AI model:", err);
+          return res.status(500).json({ message: "Failed to delete AI model" });
+        }
 
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "AI model not found" });
-      }
+        if (result.affectedRows === 0) {
+          return res.status(404).json({ message: "AI model not found" });
+        }
 
-      res.json({ message: "AI model deleted successfully" });
-    });
+        res.json({ message: "AI model deleted successfully" });
+      },
+    );
   } catch (error) {
     console.error("Delete AI model error:", error);
     res.status(500).json({ message: "Server error" });

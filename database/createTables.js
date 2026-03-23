@@ -5,7 +5,7 @@ const runQuery = (query, successMsg, errorMsg) => {
   return new Promise((resolve) => {
     db.query(query, (err) => {
       if (err) {
-        console.error(errorMsg, err.message);
+        console.error(errorMsg, err);
       } else {
         console.log(successMsg);
       }
