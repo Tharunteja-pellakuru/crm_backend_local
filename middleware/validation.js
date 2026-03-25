@@ -26,8 +26,19 @@ const validateRequest = (data, schema) => {
         return { message: `${field.replace(/_/g, " ")} must be a number.` };
       }
       
-      if (rules.enum && !rules.enum.includes(value)) {
-        return { message: `Invalid value for ${field.replace(/_/g, " ")}.` };
+      if (rules.enum) {
+        const isStringEnum = rules.enum.every((e) => typeof e === "string");
+        if (isStringEnum) {
+          if (
+            !rules.enum
+              .map((e) => e.toLowerCase())
+              .includes(value.toLowerCase())
+          ) {
+            return { message: `Invalid value for ${field.replace(/_/g, " ")}.` };
+          }
+        } else if (!rules.enum.includes(value)) {
+          return { message: `Invalid value for ${field.replace(/_/g, " ")}.` };
+        }
       }
     }
   }
