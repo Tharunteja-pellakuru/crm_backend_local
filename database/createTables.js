@@ -138,7 +138,7 @@ const createClientsTable = () => {
       client_country VARCHAR(100),
       client_state VARCHAR(100) DEFAULT '',
       client_currency VARCHAR(10),
-      client_status ENUM('Active','Inactive') DEFAULT 'Active',
+      client_status ENUM('Active', 'Inactive') DEFAULT 'Active',
       lead_id INT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
