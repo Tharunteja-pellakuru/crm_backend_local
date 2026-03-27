@@ -28,45 +28,8 @@ const formatProjectDates = (project) => {
 };
 
 const createProject = (req, res) => {
-  const {
-    project_name,
-    project_description,
-    project_category,
-    project_status,
-    project_priority,
-    project_budget,
-    onboarding_date,
-    deadline_date,
-    client_id,
-  } = req.body;
-
-  const scope_document = req.file ? req.file.filename : req.body.scope_document;
-
-  const error = validateRequest(req.body, {
-    project_name: { required: true, minLength: 2 },
-    project_category: { required: true },
-    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
-    project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
-    project_budget: { required: true, type: 'number' },
-    onboarding_date: { required: true },
-    deadline_date: { required: true },
-    client_id: { required: true }
-  });
-
-  if (error) {
-    return res.status(400).json({ message: error.message });
-  }
-  
-  if (new Date(deadline_date) <= new Date(onboarding_date)) {
-    return res.status(400).json({ message: "Deadline must be after onboarding date." });
-  }
-  const uuid = uuidv4();
-  const query =
-    "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
-  db.query(
-    query,
-    [
-      uuid,
+  try {
+    const {
       project_name,
       project_description,
       project_category,
@@ -75,35 +38,89 @@ const createProject = (req, res) => {
       project_budget,
       onboarding_date,
       deadline_date,
-      scope_document,
       client_id,
-    ],
-    (err, result) => {
-      if (err) {
-        console.log(err);
-        return res.status(500).json({ message: "Failed to create project" });
-      }
+    } = req.body;
 
-      const projectId = result.insertId;
-      db.query(
-        "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
-        [projectId],
-        (err, projects) => {
-          if (err) {
-            return res
+    const scope_document = req.file ? req.file.filename : req.body.scope_document;
+
+    const error = validateRequest(req.body, {
+      project_name: { required: true, minLength: 2 },
+      project_category: { required: true, enum: ['Tech', 'Social Media', 'Both'] },
+      project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
+      project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
+      project_budget: { required: true, type: 'number' },
+      onboarding_date: { required: true },
+      deadline_date: { required: true },
+      client_id: { required: true }
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+    
+    // Validate date objects
+    const oDate = new Date(onboarding_date);
+    const dDate = new Date(deadline_date);
+
+    if (isNaN(oDate.getTime())) {
+      return res.status(400).json({ message: "Invalid onboarding date format." });
+    }
+    if (isNaN(dDate.getTime())) {
+      return res.status(400).json({ message: "Invalid deadline date format." });
+    }
+
+    if (dDate <= oDate) {
+      return res.status(400).json({ message: "Deadline must be after onboarding date." });
+    }
+
+    const uuid = uuidv4();
+    const query =
+      "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+    db.query(
+      query,
+      [
+        uuid,
+        project_name,
+        project_description,
+        project_category,
+        project_status,
+        project_priority,
+        parseInt(project_budget) || 0,
+        onboarding_date,
+        deadline_date,
+        scope_document,
+        client_id,
+      ],
+      (err, result) => {
+        if (err) {
+          console.log(err);
+          return res.status(500).json({ message: "Failed to create project" });
+        }
+
+        const projectId = result.insertId;
+        db.query(
+          "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
+          [projectId],
+          (err, projects) => {
+            if (err) {
+              return res
+                .status(201)
+                .json({ message: "Project created successfully", uuid });
+            }
+            res
               .status(201)
-              .json({ message: "Project created successfully", uuid });
-          }
-          res
-            .status(201)
-            .json({
-              message: "Project created successfully",
-              project: formatProjectDates(projects[0]),
-            });
-        },
-      );
-    },
-  );
+              .json({
+                message: "Project created successfully",
+                project: formatProjectDates(projects[0]),
+              });
+          },
+        );
+      },
+    );
+  } catch (err) {
+    console.error("Unhandled error in createProject:", err);
+    res.status(500).json({ message: "An unexpected error occurred while creating project." });
+  }
 };
 
 const updateProject = (req, res) => {

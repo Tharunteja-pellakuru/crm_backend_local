@@ -1,11 +1,11 @@
 {
-  "name": "your-app-name",          
-  "version": "1.0.0",               
+  "name": "your-app-name",
+  "version": "1.0.0",
   "description": "Your backend API",
-  "main": "server.js",              
-  "type": "commonjs",                
+  "main": "server.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node server.js"       
+    "start": "node server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -18,11 +18,10 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "mysql2": "^3.19.1",
-    "nodemon": "^3.1.14",
     "openai": "^6.27.0",
     "uuid": "^13.0.0"
   },
-  "devDependencies": {             
+  "devDependencies": {
     "nodemon": "^3.1.14"
   }
 }
