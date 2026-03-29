@@ -96,7 +96,7 @@ const updateClient = (req, res) => {
     client_country: { required: true },
     client_state: { required: true },
     client_currency: { required: true },
-    client_status: { required: true, enum: ['Active', 'Inactive', 'On Hold', 'Completed', 'Dropped'] }
+    client_status: { required: true, enum: ['Active', 'Inactive'] }
   });
 
   if (error) {
