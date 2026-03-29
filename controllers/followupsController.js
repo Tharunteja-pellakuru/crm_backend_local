@@ -48,71 +48,93 @@ const createNewFollowup = async (req, res) => {
     const formattedMode = capitalize(followup_mode || "Call");
     const formattedPriority = capitalize(priority || "Medium");
 
-    db.query(
-      query,
-      [
-        uuid,
-        title,
-        description,
-        followup_date,
-        formattedMode,
-        formattedStatus,
-        formattedPriority,
-        clientId,
-        projectId || null,
-      ],
-      (err, result) => {
-        if (err) {
-          console.error("Error creating followup:", err);
-          return res.status(500).json({ message: "Database error" });
+    const resolveLeadId = (id, callback) => {
+      // First check if it's a valid lead_id
+      db.query("SELECT id FROM crm_tbl_leads WHERE id = ?", [id], (err, leads) => {
+        if (!err && leads.length > 0) {
+          return callback(id);
         }
+        // If not found in leads, check if it's a client_id and get its lead_id
+        db.query("SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?", [id], (err, clients) => {
+          if (!err && clients.length > 0) {
+            return callback(clients[0].lead_id);
+          }
+          // Fallback to original ID and let DB handle constraint if it fails
+          callback(id);
+        });
+      });
+    };
 
-        const followupId = result.insertId;
+    resolveLeadId(clientId, (finalLeadId) => {
+      // If projectId is present, we prioritize it and set lead_id to null as per requirement
+      const leadIdToInsert = projectId ? null : finalLeadId;
+      
+      db.query(
+        query,
+        [
+          uuid,
+          title,
+          description,
+          followup_date,
+          formattedMode,
+          formattedStatus,
+          formattedPriority,
+          leadIdToInsert,
+          projectId || null,
+        ],
+        (err, result) => {
+          if (err) {
+            console.error("Error creating followup:", err);
+            return res.status(500).json({ message: "Database error: " + err.message });
+          }
 
-        // If status is "Completed", also update/insert into crm_tbl_followUpSummary
-        if (formattedStatus === "Completed") {
-          const summaryUuid = uuidv4();
-          const querySummary = `
-            INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `;
+          const followupId = result.insertId;
 
-          const formattedCompletedAt = new Date()
-            .toISOString()
-            .slice(0, 19)
-            .replace("T", " ");
+          // If status is "Completed", also update/insert into crm_tbl_followUpSummary
+          if (formattedStatus === "Completed") {
+            const summaryUuid = uuidv4();
+            const querySummary = `
+              INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `;
 
-          db.query(
-            querySummary,
-            [
-              summaryUuid,
-              followupId,
-              projectId || null,
-              follow_brief || "",
-              formattedCompletedAt,
-              "System",
-            ],
-            (summaryErr) => {
-              if (summaryErr) {
-                console.error(
-                  "Error saving initial followup summary:",
-                  summaryErr,
-                );
-              }
-              res.status(201).json({
-                message: "Followup created and summary saved",
-                followup: { id: followupId, uuid, ...req.body },
-              });
-            },
-          );
-        } else {
-          res.status(201).json({
-            message: "Followup created successfully",
-            followup: { id: followupId, uuid, ...req.body },
-          });
-        }
-      },
-    );
+            const formattedCompletedAt = new Date()
+              .toISOString()
+              .slice(0, 19)
+              .replace("T", " ");
+
+            db.query(
+              querySummary,
+              [
+                summaryUuid,
+                followupId,
+                projectId || null,
+                follow_brief || "",
+                formattedCompletedAt,
+                "System",
+              ],
+              (summaryErr) => {
+                if (summaryErr) {
+                  console.error(
+                    "Error saving initial followup summary:",
+                    summaryErr,
+                  );
+                }
+                res.status(201).json({
+                  message: "Followup created and summary saved",
+                  followup: { id: followupId, uuid, ...req.body },
+                });
+              },
+            );
+          } else {
+            res.status(201).json({
+              message: "Followup created successfully",
+              followup: { id: followupId, uuid, ...req.body },
+            });
+          }
+        },
+      );
+    });
   } catch (error) {
     console.error("Error in createNewFollowup:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -122,7 +144,9 @@ const createNewFollowup = async (req, res) => {
 // Get all followups
 const getAllFollowups = async (req, res) => {
   const query = `
-    SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, p.project_name as projectName
+    SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
+           p.project_name as projectName, p.client_id as mappedClientId,
+           COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
     FROM crm_tbl_followups f
     LEFT JOIN crm_tbl_followUpSummary s ON f.id = s.followup_id
     LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
@@ -136,7 +160,8 @@ const getAllFollowups = async (req, res) => {
     const transformedResults = results.map((f) => ({
       id: f.id,
       uuid: f.uuid,
-      clientId: f.lead_id,
+      leadId: f.originalLeadId || f.lead_id,
+      clientId: f.mappedClientId || f.lead_id,
       projectId: f.project_id,
       projectName: f.projectName,
       title: f.followup_title,
@@ -403,16 +428,19 @@ const getClientFollowups = async (req, res) => {
   }
 
   const query = `
-    SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, p.project_name as projectName
+    SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
+           p.project_name as projectName, p.client_id as mappedClientId,
+           COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
     FROM crm_tbl_followups f
     LEFT JOIN crm_tbl_followUpSummary s ON f.id = s.followup_id
     LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
     WHERE f.lead_id = ? 
        OR f.lead_id = (SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?)
+       OR f.project_id IN (SELECT project_id FROM crm_tbl_projects WHERE client_id = ?)
     ORDER BY f.followup_datetime DESC
   `;
 
-  db.query(query, [clientId, clientId], (err, results) => {
+  db.query(query, [clientId, clientId, clientId], (err, results) => {
     if (err) {
       console.error("Error fetching client followups:", err);
       return res.status(500).json({ message: "Database error" });
@@ -421,7 +449,8 @@ const getClientFollowups = async (req, res) => {
     const transformedResults = results.map((f) => ({
       id: f.id,
       uuid: f.uuid,
-      clientId: f.lead_id,
+      leadId: f.originalLeadId || f.lead_id,
+      clientId: f.mappedClientId || f.lead_id,
       projectId: f.project_id,
       projectName: f.projectName,
       title: f.followup_title,
