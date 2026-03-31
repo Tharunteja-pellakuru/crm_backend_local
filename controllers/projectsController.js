@@ -69,8 +69,8 @@ const createProject = (req, res) => {
       return res.status(400).json({ message: "Invalid deadline date format." });
     }
 
-    if (dDate <= oDate) {
-      return res.status(400).json({ message: "Deadline must be after onboarding date." });
+    if (dDate < oDate) {
+      return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
     }
 
     const uuid = uuidv4();
@@ -150,8 +150,8 @@ const updateProject = (req, res) => {
     return res.status(400).json({ message: error.message });
   }
   
-  if (onboarding_date && deadline_date && new Date(deadline_date) <= new Date(onboarding_date)) {
-    return res.status(400).json({ message: "Deadline must be after onboarding date." });
+  if (onboarding_date && deadline_date && new Date(deadline_date) < new Date(onboarding_date)) {
+    return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
   }
 
   const scope_document = req.file ? req.file.filename : req.body.scope_document;

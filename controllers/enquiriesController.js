@@ -77,7 +77,7 @@ const addEnquiry = (req, res) => {
 const updateEnquiryStatus = (req, res) => {
   try {
     const { id } = req.params;
-    const { status, remarks } = req.body;
+    const { status, remarks, message } = req.body;
 
     let query = `UPDATE crm_tbl_enquiries SET status = ?`;
     let params = [status];
@@ -85,6 +85,11 @@ const updateEnquiryStatus = (req, res) => {
     if (remarks !== undefined) {
       query += `, remarks = ?`;
       params.push(remarks);
+    }
+
+    if (message !== undefined) {
+      query += `, message = ?`;
+      params.push(message);
     }
 
     query += ` WHERE enquiry_id = ? OR uuid = ?`;

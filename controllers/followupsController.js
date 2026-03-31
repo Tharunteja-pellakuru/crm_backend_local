@@ -17,7 +17,7 @@ const createNewFollowup = async (req, res) => {
   } = req.body;
 
   const error = validateRequest(req.body, {
-    clientId: { required: true },
+    clientId: { required: !req.body.projectId },
     title: { required: true, minLength: 2 },
     followup_date: { required: true },
     followup_mode: { required: true, enum: ['Call', 'Email', 'Whatsapp', 'Meeting'] },

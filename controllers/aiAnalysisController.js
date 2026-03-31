@@ -261,31 +261,102 @@ Message: ${e.message}
       .join("\n---\n");
 
     const prompt = `
-You are a strict AI enquiry classifier for EParivartan.
-Analyze the following ${enquiries.length} enquiries and categorize each as RELEVANT or IRRELEVANT.
+You are a STRICT AI enquiry classifier for EParivartan.
 
-EParivartan SERVICES: Website Dev, Web Apps (MERN), Mobile Apps (Flutter), E-commerce, SEO, Digital Marketing, UI/UX, Media Services (Video/Design).
+Your task is to classify each enquiry as RELEVANT or IRRELEVANT based ONLY on business intent.
 
-LABEL DEFINITIONS:
-1. RELEVANT: Potential clients for our digital/media services.
-2. IRRELEVANT: Job/Internship applications, physical services (Interior, Construction), Spam, personal messages, or agencies selling to us.
+---
+
+EParivartan SERVICES:
+
+* Website Development
+* Web Applications (MERN)
+* Mobile Apps (Flutter)
+* E-commerce Solutions
+* SEO & Digital Marketing
+* UI/UX Design
+* Media Services (Video Editing, Graphic Design)
+
+---
+
+CLASSIFICATION RULES:
+
+RELEVANT:
+
+* Client wants a website, app, marketing, design, or media services
+* Business inquiries for digital solutions
+* Project discussions, pricing requests, service questions
+
+IRRELEVANT:
+
+* Job or internship applications
+* Freelancers/agencies offering services to us
+* Physical services (construction, interior, etc.)
+* Spam, greetings, or unrelated messages
+
+EDGE CASES:
+
+* If intent is unclear → mark IRRELEVANT with low leadScore (0–30)
+* If mixed intent → prioritize dominant intent
+* Empty or meaningless text → IRRELEVANT
+
+---
+
+LEAD SCORE GUIDELINES (0–100):
+
+* 90–100 → Strong client intent (ready to start project)
+* 70–89 → Clear interest but needs discussion
+* 40–69 → Possible lead, vague requirement
+* 0–39 → Not a lead / irrelevant
+
+---
+
+CATEGORY VALUES (STRICT):
+Use ONLY one of the following:
+
+* Website
+* Web App
+* Mobile App
+* E-commerce
+* SEO
+* Digital Marketing
+* UI/UX
+* Media
+* Job/Internship
+* Spam
+* Other
+
+---
+
+IMPORTANT OUTPUT RULES:
+
+* Return ONLY valid JSON
+* No explanations outside JSON
+* Do NOT include markdown
+* Do NOT change structure
+* Ensure all fields are present
+
+---
 
 Batch Input:
 ${enquiriesData}
 
-Return ONLY a JSON object with a "results" array:
+---
+
+Return format:
 {
-  "results": [
-    {
-      "entryId": number,
-      "isRelevant": boolean,
-      "label": "RELEVANT | IRRELEVANT",
-      "category": "Short category",
-      "leadScore": 0-100,
-      "reason": "Short reason"
-    }
-  ]
+"results": [
+{
+"entryId": number,
+"isRelevant": boolean,
+"label": "RELEVANT" | "IRRELEVANT",
+"category": "One from allowed list",
+"leadScore": number,
+"reason": "Max 15 words"
 }
+]
+}
+
 `;
 
     let text;

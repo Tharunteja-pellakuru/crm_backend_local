@@ -75,7 +75,7 @@ const createNewFollowupsTable = () => {
         followup_priority ENUM('High','Medium','Low') NOT NULL DEFAULT 'Medium',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        lead_id INT NOT NULL,
+        lead_id INT NULL,
         project_id INT NULL,
         INDEX (lead_id),
         INDEX (project_id),
