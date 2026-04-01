@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const bcrypt = require("bcrypt");
+const { v4: uuidv4 } = require("uuid");
 
 // Helper to run a query as a promise
 const runQuery = (query, successMsg, errorMsg) => {
@@ -35,7 +37,50 @@ const createUsersTable = async () => {
     "Error creating users table:",
   );
 
-  // Step 2: Insert default admin if not exis
+  // Step 2: Insert default admin if not exists
+  const defaultEmail = "ceo@eparivartan.com";
+  const hashedPassword = await bcrypt.hash("Password@123", 10);
+  const uuid = uuidv4();
+
+  const checkQuery = "SELECT id FROM crm_tbl_admins WHERE email = ? LIMIT 1";
+  const insertQuery = `INSERT INTO crm_tbl_admins (uuid, full_name, email, password, role, status, privileges, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=id`;
+
+  // Check if exists
+  return new Promise((resolve) => {
+    db.query(checkQuery, [defaultEmail], (err, result) => {
+      if (err) {
+        console.error("Error checking for default admin:", err);
+        resolve();
+        return;
+      }
+      if (result.length === 0) {
+        db.query(
+          insertQuery,
+          [
+            uuid,
+            "Anand",
+            defaultEmail,
+            hashedPassword,
+            "Root Admin",
+            true,
+            "3",
+            null,
+          ],
+          (err) => {
+            if (err) {
+              console.error("Error inserting default admin:", err);
+            } else {
+              console.log("Default admin user created");
+            }
+            resolve();
+          },
+        );
+      } else {
+        console.log("Default admin already exists");
+        resolve();
+      }
+    });
+  });
 };
 
 // Leads
@@ -207,11 +252,11 @@ const createEnquiriesTable = () => {
 const createAllTables = async () => {
   await createUsersTable();
   await createLeadsTable();
-  await createNewFollowupsTable();
-  await createFollowupSummaryTable();
   await createAiModelsTable();
   await createClientsTable();
   await createProjectsTable();
+  await createNewFollowupsTable();
+  await createFollowupSummaryTable();
   await createEnquiriesTable();
 };
 
