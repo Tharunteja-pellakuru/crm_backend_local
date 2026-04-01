@@ -125,6 +125,10 @@ const exportEnquiries = async (req, res) => {
   try {
     const [results] = await db.promise().query(query);
 
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
+
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
       "S.No": index + 1,
@@ -202,6 +206,10 @@ const exportLeads = async (req, res) => {
 
   try {
     const [results] = await db.promise().query(query);
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
 
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
@@ -285,6 +293,10 @@ const exportFollowups = async (req, res) => {
   try {
     const [results] = await db.promise().query(query);
 
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
+
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
       "S.No": index + 1,
@@ -363,6 +375,10 @@ const exportClients = async (req, res) => {
   try {
     const [results] = await db.promise().query(query);
 
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
+
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
       "S.No": index + 1,
@@ -438,6 +454,10 @@ const exportProjects = async (req, res) => {
 
   try {
     const [results] = await db.promise().query(query);
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
 
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
@@ -518,6 +538,10 @@ const exportAllCRMData = async (req, res) => {
 
   try {
     const [results] = await db.promise().query(query);
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Empty records" });
+    }
 
     // Transform data for Excel
     const transformedData = results.map((row, index) => ({
