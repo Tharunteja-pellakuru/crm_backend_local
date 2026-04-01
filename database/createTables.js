@@ -37,23 +37,24 @@ const createUsersTable = async () => {
     "Error creating users table:",
   );
 
-  // Step 2: Insert default admin if not exists
+  // Step 2: Insert default admin if no admins exist
   const defaultEmail = "ceo@eparivartan.com";
   const hashedPassword = await bcrypt.hash("Password@123", 10);
   const uuid = uuidv4();
+  const defaultImage = null;
 
-  const checkQuery = "SELECT id FROM crm_tbl_admins WHERE email = ? LIMIT 1";
-  const insertQuery = `INSERT INTO crm_tbl_admins (uuid, full_name, email, password, role, status, privileges, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=id`;
+  const checkQuery = "SELECT COUNT(*) as count FROM crm_tbl_admins";
+  const insertQuery = `INSERT INTO crm_tbl_admins (uuid, full_name, email, password, role, status, privileges, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  // Check if exists
+  // Check if any admins exist
   return new Promise((resolve) => {
-    db.query(checkQuery, [defaultEmail], (err, result) => {
+    db.query(checkQuery, (err, result) => {
       if (err) {
-        console.error("Error checking for default admin:", err);
+        console.error("Error checking for admins:", err);
         resolve();
         return;
       }
-      if (result.length === 0) {
+      if (result[0].count === 0) {
         db.query(
           insertQuery,
           [
@@ -64,19 +65,19 @@ const createUsersTable = async () => {
             "Root Admin",
             true,
             "3",
-            null,
+            defaultImage,
           ],
           (err) => {
             if (err) {
               console.error("Error inserting default admin:", err);
             } else {
-              console.log("Default admin user created");
+              console.log("Default admin user created with image");
             }
             resolve();
           },
         );
       } else {
-        console.log("Default admin already exists");
+        console.log("Admins already exist, skipping default admin creation");
         resolve();
       }
     });

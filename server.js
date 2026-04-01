@@ -15,6 +15,7 @@ const followUpsRoutes = require("./routes/followUpsRoutes");
 const clientsRoutes = require("./routes/clientsRoutes");
 const projectsRoutes = require("./routes/projectsRoutes");
 const enquiriesRoutes = require("./routes/enquiriesRoutes");
+const exportRoutes = require("./routes/exportRoutes");
 
 const app = express();
 
@@ -61,3 +62,4 @@ app.use("/api", followUpsRoutes);
 app.use("/api", clientsRoutes);
 app.use("/api", projectsRoutes);
 app.use("/api", enquiriesRoutes);
+app.use("/api/export", exportRoutes);
