@@ -15,8 +15,12 @@ const createLead = (req, res) => {
       email,
       message,
       country,
+      country_code,
       enquiry_id,
     } = req.body;
+
+
+    console.log(full_name, phone_number, lead_category, lead_status, website_url, email, message, country, country_code, enquiry_id);
 
     // Validation
     const error = validateRequest(req.body, {
@@ -40,7 +44,8 @@ const createLead = (req, res) => {
       email,     
       message,
       country,
-      enquiry_id) VALUES (?,?,?,?,?,?,?,?,?,?)`;
+      country_code,
+      enquiry_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
 
     db.query(
       query,
@@ -54,6 +59,7 @@ const createLead = (req, res) => {
         email,
         message,
         country,
+        country_code,
         enquiry_id,
       ],
       (err, result) => {
@@ -97,6 +103,7 @@ const updateLead = (req, res) => {
       lead_category,
       website_url,
       country,
+      country_code,
     } = req.body;
 
     const query = `UPDATE crm_tbl_leads SET 
@@ -107,7 +114,8 @@ const updateLead = (req, res) => {
       message = ?, 
       lead_category = ?, 
       website_url = ?,
-      country = ?
+      country = ?,
+      country_code = ?
       WHERE id = ?;`;
 
     db.query(
@@ -121,6 +129,7 @@ const updateLead = (req, res) => {
         lead_category,
         website_url,
         country,
+        country_code,
         id,
       ],
       (err, result) => {

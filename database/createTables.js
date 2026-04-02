@@ -98,6 +98,7 @@ const createLeadsTable = () => {
       website_url TEXT,
       message TEXT,
       country VARCHAR(100),
+      country_code VARCHAR(10),
       enquiry_id INT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
