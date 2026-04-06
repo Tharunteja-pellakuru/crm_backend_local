@@ -142,6 +142,7 @@ const getClients = (req, res) => {
       c.*, 
       l.email, 
       l.phone_number AS phone,
+      l.country_code AS country_code,
       l.lead_category AS projectCategory,
       l.website_url AS website,
       l.message AS brief_message
