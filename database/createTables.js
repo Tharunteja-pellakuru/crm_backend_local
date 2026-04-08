@@ -21,7 +21,7 @@ const createUsersTable = async () => {
   // Step 1: Create table
   await runQuery(
     `CREATE TABLE IF NOT EXISTS crm_tbl_admins (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      admin_id INT AUTO_INCREMENT PRIMARY KEY,
       uuid VARCHAR(100) UNIQUE,
       full_name VARCHAR(150) NOT NULL,
       email VARCHAR(150) UNIQUE NOT NULL,
@@ -31,7 +31,9 @@ const createUsersTable = async () => {
       privileges VARCHAR(50),
       image TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_by INT NULL,
+      updated_by INT NULL
     )`,
     "Users table ready",
     "Error creating users table:",
@@ -162,13 +164,17 @@ const createFollowupSummaryTable = () => {
 const createAiModelsTable = () => {
   return runQuery(
     `CREATE TABLE IF NOT EXISTS crm_tbl_aiModels (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      aimodel_id INT AUTO_INCREMENT PRIMARY KEY,
+      uuid CHAR(36) NOT NULL UNIQUE,
       name VARCHAR(150) NOT NULL,
       provider VARCHAR(100),
       model_id VARCHAR(150),
       api_key TEXT,
       is_default BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_by INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      updated_by INT NULL
     )`,
     "AI Models Table Created",
     "Error Creating AI Models Table:",

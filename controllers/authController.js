@@ -41,7 +41,7 @@ const loginAdmin = (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       {
-        id: user.id,
+        admin_id: user.admin_id,
         uuid: user.uuid,
         email: user.email,
         role: user.role,
@@ -59,7 +59,7 @@ const loginAdmin = (req, res) => {
       message: "Login successful",
       token,
       user: {
-        id: user.id,
+        admin_id: user.admin_id,
         uuid: user.uuid,
         full_name: user.full_name,
         email: user.email,

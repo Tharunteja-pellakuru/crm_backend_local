@@ -9,6 +9,7 @@ const getAllAdminUsers = async (req, res) => {
 
     let query = `
       SELECT 
+        admin_id,
         uuid as id, 
         full_name as name, 
         email, 
@@ -77,13 +78,13 @@ const createAdminUser = async (req, res) => {
 
     const query = `
       INSERT INTO crm_tbl_admins 
-      (uuid, full_name, email, password, role, privileges, image)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (uuid, full_name, email, password, role, privileges, image, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(
       query,
-      [userUUID, full_name, email, hashedPassword, role, privileges, image],
+      [userUUID, full_name, email, hashedPassword, role, privileges || 3, image, req.user?.admin_id || null],
       (err, result) => {
         if (err) {
           console.error(err);
@@ -132,7 +133,8 @@ const updateAdminUser = async (req, res) => {
         role = ?,
         privileges = ?,
         status = ?,
-        image = COALESCE(?, image)
+        image = COALESCE(?, image),
+        updated_by = ?
       WHERE uuid = ?
     `;
 
@@ -146,6 +148,7 @@ const updateAdminUser = async (req, res) => {
         privileges || 3,
         statusValue,
         image,
+        req.user?.admin_id || null,
         uuid,
       ],
       (err, result) => {

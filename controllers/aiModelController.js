@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 const getAllAiModels = async (req, res) => {
   try {
     const query =
-      "SELECT id, name, provider, model_id, api_key, is_default, created_at FROM crm_tbl_aiModels ORDER BY created_at ASC";
+      "SELECT aimodel_id, uuid, name, provider, model_id, api_key, is_default, created_at, updated_at, created_by, updated_by FROM crm_tbl_aiModels ORDER BY created_at ASC";
     db.query(query, (err, results) => {
       if (err) {
         console.error("Error fetching AI models:", err);
@@ -23,6 +23,8 @@ const getAllAiModels = async (req, res) => {
 const createAiModel = async (req, res) => {
   try {
     const { name, provider, modelId, apiKey, isDefault } = req.body;
+    const createdBy = req.user ? req.user.admin_id : null;
+    const uuid = uuidv4();
 
     if (!name || !provider || !modelId || !apiKey) {
       return res.status(400).json({
@@ -38,10 +40,10 @@ const createAiModel = async (req, res) => {
     }
 
     const query =
-      "INSERT INTO crm_tbl_aiModels (name, provider, model_id, api_key, is_default) VALUES (?, ?, ?, ?, ?)";
+      "INSERT INTO crm_tbl_aiModels (uuid, name, provider, model_id, api_key, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)";
     db.query(
       query,
-      [name, provider, modelId, apiKey, isDefault || false],
+      [uuid, name, provider, modelId, apiKey, isDefault || false, createdBy],
       (err, result) => {
         if (err) {
           console.error("Error creating AI model:", err);
@@ -49,7 +51,8 @@ const createAiModel = async (req, res) => {
         }
         res.status(201).json({
           message: "AI model created successfully",
-          id: result.insertId,
+          aimodel_id: result.insertId,
+          uuid: uuid,
         });
       },
     );
@@ -62,13 +65,14 @@ const createAiModel = async (req, res) => {
 // Update AI model
 const updateAiModel = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id: aimodel_id } = req.params;
     const { name, provider, modelId, apiKey, isDefault } = req.body;
+    const updatedBy = req.user ? req.user.admin_id : null;
 
     // Check if model exists
     db.query(
-      "SELECT * FROM crm_tbl_aiModels WHERE id = ?",
-      [id],
+      "SELECT * FROM crm_tbl_aiModels WHERE aimodel_id = ?",
+      [aimodel_id],
       (err, results) => {
         if (err) {
           console.error("Error finding AI model:", err);
@@ -111,12 +115,16 @@ const updateAiModel = async (req, res) => {
           values.push(isDefault);
         }
 
+        // Always update updated_by if user is authenticated
+        updates.push("updated_by = ?");
+        values.push(updatedBy);
+
         if (updates.length === 0) {
           return res.status(400).json({ message: "No fields to update" });
         }
 
-        values.push(id);
-        const query = `UPDATE crm_tbl_aiModels SET ${updates.join(", ")} WHERE id = ?`;
+        values.push(aimodel_id);
+        const query = `UPDATE crm_tbl_aiModels SET ${updates.join(", ")} WHERE aimodel_id = ?`;
 
         db.query(query, values, (err) => {
           if (err) {
@@ -138,11 +146,11 @@ const updateAiModel = async (req, res) => {
 // Delete AI model
 const deleteAiModel = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id: aimodel_id } = req.params;
 
     db.query(
-      "DELETE FROM crm_tbl_aiModels WHERE id = ?",
-      [id],
+      "DELETE FROM crm_tbl_aiModels WHERE aimodel_id = ?",
+      [aimodel_id],
       (err, result) => {
         if (err) {
           console.error("Error deleting AI model:", err);
@@ -191,7 +199,7 @@ const getAiModelByIdInternal = (identifier) => {
   return new Promise((resolve, reject) => {
     // try to match on primary key first, then fall back to model_id value
     db.query(
-      "SELECT * FROM crm_tbl_aiModels WHERE id = ? OR model_id = ? LIMIT 1",
+      "SELECT * FROM crm_tbl_aiModels WHERE aimodel_id = ? OR model_id = ? LIMIT 1",
       [identifier, identifier],
       (err, results) => {
         if (err) reject(err);
