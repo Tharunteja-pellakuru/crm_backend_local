@@ -28,7 +28,7 @@ const createClient = (req, res) => {
   }
   const uuid = uuidv4();
   const query =
-    "INSERT INTO crm_tbl_clients (uuid,organisation_name,client_name,client_country,client_state,client_currency,client_status,lead_id) VALUES (?,?,?,?,?,?,?,?)";
+    "INSERT INTO crm_tbl_clients (uuid,organisation_name,client_name,client_country,client_state,client_currency,client_status,lead_id,created_by) VALUES (?,?,?,?,?,?,?,?,?)";
   db.query(
     query,
     [
@@ -40,6 +40,7 @@ const createClient = (req, res) => {
       client_currency,
       client_status,
       lead_id,
+      req.user.admin_id,
     ],
     (err, result) => {
       if (err) {
@@ -109,7 +110,8 @@ const updateClient = (req, res) => {
     client_country = ?, 
     client_state = ?, 
     client_currency = ?, 
-    client_status = ?
+    client_status = ?,
+    updated_by = ?
     WHERE client_id = ?`;
 
   db.query(
@@ -121,6 +123,7 @@ const updateClient = (req, res) => {
       client_state,
       client_currency,
       client_status,
+      req.user.admin_id,
       id,
     ],
     (err, result) => {
@@ -140,6 +143,7 @@ const getClients = (req, res) => {
   const query = `
     SELECT 
       c.*, 
+      c.client_id AS id,
       l.email, 
       l.phone_number AS phone,
       l.country_code AS country_code,
@@ -199,11 +203,11 @@ const convertLead = async (req, res) => {
       // 1. Create Client
       const clientUuid = uuidv4();
       const clientQuery =
-        "INSERT INTO crm_tbl_clients (uuid, organisation_name, client_name, client_country, client_state, client_currency, client_status, lead_id) VALUES (?,?,?,?,?,?,?,?)";
+        "INSERT INTO crm_tbl_clients (uuid, organisation_name, client_name, client_country, client_state, client_currency, client_status, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?)";
       
       connection.query(
         clientQuery,
-        [clientUuid, organisation_name, client_name, client_country || "", client_state || "", client_currency || "", client_status || "Active", lead_id],
+        [clientUuid, organisation_name, client_name, client_country || "", client_state || "", client_currency || "", client_status || "Active", lead_id, req.user.admin_id],
         (err, clientResult) => {
           if (err) {
             return connection.rollback(() => {
@@ -215,11 +219,10 @@ const convertLead = async (req, res) => {
 
           const clientId = clientResult.insertId;
 
-          // 2. Create Project if project_name exists
           if (project_name) {
             const projectUuid = uuidv4();
             const projectQuery =
-              "INSERT INTO crm_tbl_projects (uuid, project_name, project_description, project_category, project_status, project_priority, project_budget, onboarding_date, deadline_date, scope_document, client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+              "INSERT INTO crm_tbl_projects (uuid, project_name, project_description, project_category, project_status, project_priority, project_budget, onboarding_date, deadline_date, scope_document, client_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
             
             connection.query(
               projectQuery,
@@ -234,7 +237,8 @@ const convertLead = async (req, res) => {
                 onboarding_date,
                 deadline_date,
                 scope_document || null,
-                clientId
+                clientId,
+                req.user.admin_id
               ],
               (err) => {
                 if (err) {

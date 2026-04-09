@@ -65,8 +65,8 @@ const callGemini = async (apiKey, modelId, prompt, schema) => {
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: modelId || "gemini-1.5-flash",
-      contents: prompt,
+      model: modelId || "gemini-2.0-flash",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -74,7 +74,10 @@ const callGemini = async (apiKey, modelId, prompt, schema) => {
     });
     return response.text;
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    if (error.details) {
+      console.error("Gemini API Error Details:", JSON.stringify(error.details, null, 2));
+    }
+    console.error("Gemini API Error:", error.message || error);
     throw error;
   }
 };
@@ -392,9 +395,16 @@ Return format:
 
     const jsonResult = JSON.parse(text || '{"results":[]}');
     const results = (jsonResult.results || []).map((res, i) => {
-      const isRel = res.isRelevant ?? res.label === "RELEVANT";
+      // Find the corresponding enquiry either by entryId or fall back to array index
+      const entryIdx = typeof res.entryId === "number" ? res.entryId : i;
+      const originalEnquiry = enquiries[entryIdx];
+      
+      const isRel = typeof res.isRelevant === "boolean" 
+        ? res.isRelevant 
+        : (res.label === "RELEVANT" || res.isRelevant === "true");
+
       return {
-        id: enquiries[res.entryId || i]?.id,
+        id: originalEnquiry?.enquiry_id || originalEnquiry?.id || null,
         isRelevant: isRel,
         label: isRel ? "RELEVANT" : "IRRELEVANT",
         category: res.category || (isRel ? "Relevant Lead" : "Irrelevant"),

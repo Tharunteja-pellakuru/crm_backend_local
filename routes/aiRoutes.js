@@ -13,14 +13,16 @@ const {
   batchAnalyzeEnquiries,
 } = require("../controllers/aiAnalysisController");
 
+const { authenticateToken } = require("../middleware/authMiddleware");
+
 // AI Models routes
-router.get("/ai-models", getAllAiModels);
-router.post("/ai-models", createAiModel);
-router.put("/ai-models/:id", updateAiModel);
-router.delete("/ai-models/:id", deleteAiModel);
+router.get("/ai-models", authenticateToken, getAllAiModels);
+router.post("/ai-models", authenticateToken, createAiModel);
+router.put("/ai-models/:id", authenticateToken, updateAiModel);
+router.delete("/ai-models/:id", authenticateToken, deleteAiModel);
 
 // AI Analysis routes
-router.post("/ai/analyze-enquiry", analyzeEnquiry);
-router.post("/ai/batch-analyze", batchAnalyzeEnquiries);
+router.post("/ai/analyze-enquiry", authenticateToken, analyzeEnquiry);
+router.post("/ai/batch-analyze", authenticateToken, batchAnalyzeEnquiries);
 
 module.exports = router;

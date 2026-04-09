@@ -267,7 +267,7 @@ const exportLeads = async (req, res) => {
 const exportFollowups = async (req, res) => {
   const query = `
     SELECT
-      f.id AS followup_id,
+      f.followup_id AS followup_id,
       f.uuid,
       f.followup_title,
       f.followup_description,

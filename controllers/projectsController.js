@@ -73,9 +73,10 @@ const createProject = (req, res) => {
       return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
     }
 
+    const admin_id = req.user?.admin_id || null;
     const uuid = uuidv4();
     const query =
-      "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+      "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
     db.query(
       query,
       [
@@ -90,6 +91,7 @@ const createProject = (req, res) => {
         deadline_date,
         scope_document,
         client_id,
+        admin_id,
       ],
       (err, result) => {
         if (err) {
@@ -154,6 +156,7 @@ const updateProject = (req, res) => {
     return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
   }
 
+  const admin_id = req.user?.admin_id || null;
   const scope_document = req.file ? req.file.filename : req.body.scope_document;
 
   let query = `UPDATE crm_tbl_projects SET 
@@ -164,7 +167,8 @@ const updateProject = (req, res) => {
     project_priority = ?, 
     project_budget = ?, 
     onboarding_date = ?, 
-    deadline_date = ?`;
+    deadline_date = ?,
+    updated_by = ?`;
 
   const queryParams = [
     project_name,
@@ -175,6 +179,7 @@ const updateProject = (req, res) => {
     project_budget,
     onboarding_date,
     deadline_date,
+    admin_id,
   ];
 
   if (scope_document) {
@@ -214,7 +219,7 @@ const updateProject = (req, res) => {
 };
 
 const getProjects = (req, res) => {
-  const query = "SELECT * FROM crm_tbl_projects";
+  const query = "SELECT *, project_id AS id FROM crm_tbl_projects";
   db.query(query, (err, result) => {
     if (err) {
       console.error("Error fetching projects:", err.message);
@@ -236,9 +241,10 @@ const updateProjectStatus = (req, res) => {
     return res.status(400).json({ message: error.message });
   }
 
+  const admin_id = req.user?.admin_id || null;
   const query =
-    "UPDATE crm_tbl_projects SET project_status = ? WHERE project_id = ?";
-  db.query(query, [project_status, id], (err, result) => {
+    "UPDATE crm_tbl_projects SET project_status = ?, updated_by = ? WHERE project_id = ?";
+  db.query(query, [project_status, admin_id, id], (err, result) => {
     if (err) {
       console.error("Database error updating project status:", err.message);
       return res

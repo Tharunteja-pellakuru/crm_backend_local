@@ -4,7 +4,7 @@ const { validateRequest } = require("../middleware/validation");
 
 const getEnquiries = (req, res) => {
   try {
-    const query = `SELECT * FROM crm_tbl_enquiries ORDER BY enquiry_id DESC`;
+    const query = `SELECT *, enquiry_id AS id FROM crm_tbl_enquiries ORDER BY enquiry_id DESC`;
     db.query(query, (err, result) => {
       if (err) {
         console.error("Error fetching enquiries:", err.message);
@@ -42,11 +42,12 @@ const addEnquiry = (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, message, status, remarks) VALUES (?,?,?,?,?,?,?,?)`;
+    const admin_id = req.user?.admin_id || null;
+    const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, message, status, remarks, created_by) VALUES (?,?,?,?,?,?,?,?,?)`;
 
     db.query(
       query,
-      [uuid, full_name, email, phone_number, website_url, message, status, remarks],
+      [uuid, full_name, email, phone_number, website_url, message, status, remarks, admin_id],
       (err, result) => {
         if (err) {
           console.error("Error creating enquiry:", err.message);
@@ -79,8 +80,9 @@ const updateEnquiryStatus = (req, res) => {
     const { id } = req.params;
     const { status, remarks, message } = req.body;
 
-    let query = `UPDATE crm_tbl_enquiries SET status = ?`;
-    let params = [status];
+    const admin_id = req.user?.admin_id || null;
+    let query = `UPDATE crm_tbl_enquiries SET status = ?, updated_by = ?`;
+    let params = [status, admin_id];
 
     if (remarks !== undefined) {
       query += `, remarks = ?`;

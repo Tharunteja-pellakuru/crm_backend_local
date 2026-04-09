@@ -26,10 +26,12 @@ const upload = multer({
   },
 });
 
-router.post("/add-project", upload.single("scope_document"), createProject);
-router.get("/get-projects", getProjects);
-router.put("/update-project/:id", upload.single("scope_document"), updateProject);
-router.put("/update-project-status/:id", updateProjectStatus);
-router.delete("/delete-project/:id", deleteProject);
+const { authenticateToken } = require("../middleware/authMiddleware");
+
+router.post("/add-project", authenticateToken, upload.single("scope_document"), createProject);
+router.get("/get-projects", authenticateToken, getProjects);
+router.put("/update-project/:id", authenticateToken, upload.single("scope_document"), updateProject);
+router.put("/update-project-status/:id", authenticateToken, updateProjectStatus);
+router.delete("/delete-project/:id", authenticateToken, deleteProject);
 
 module.exports = router;

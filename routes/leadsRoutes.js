@@ -8,9 +8,11 @@ const {
   deleteLead,
 } = require("../controllers/leadsController");
 
-router.post("/add-lead", createLead);
-router.put("/update-lead/:id", updateLead);
-router.get("/get-leads", getLeads);
-router.delete("/delete-lead/:id", deleteLead);
+const { authenticateToken } = require("../middleware/authMiddleware");
+
+router.post("/add-lead", authenticateToken, createLead);
+router.put("/update-lead/:id", authenticateToken, updateLead);
+router.get("/get-leads", authenticateToken, getLeads);
+router.delete("/delete-lead/:id", authenticateToken, deleteLead);
 
 module.exports = router;

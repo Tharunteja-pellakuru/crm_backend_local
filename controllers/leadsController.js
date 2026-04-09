@@ -43,7 +43,8 @@ const createLead = (req, res) => {
       email,     
       message,
       country_code,
-      enquiry_id) VALUES (?,?,?,?,?,?,?,?,?,?)`;
+      enquiry_id,
+      created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
 
     db.query(
       query,
@@ -58,6 +59,7 @@ const createLead = (req, res) => {
         message,
         country_code,
         enquiry_id,
+        req.user.admin_id,
       ],
       (err, result) => {
         if (err) {
@@ -91,77 +93,93 @@ const createLead = (req, res) => {
 const updateLead = (req, res) => {
   try {
     const { id: lead_id } = req.params;
-    const {
-      full_name,
-      phone_number,
-      email,
-      lead_status,
-      message,
-      lead_category,
-      website_url,
-      country_code,
-    } = req.body;
+    const updateData = req.body;
 
-    const query = `UPDATE crm_tbl_leads SET 
-      full_name = ?, 
-      phone_number = ?, 
-      email = ?, 
-      lead_status = ?, 
-      message = ?, 
-      lead_category = ?, 
-      website_url = ?,
-      country_code = ?
-      WHERE lead_id = ?;`;
-
+    // 1. Fetch current lead data to merge
     db.query(
-      query,
-      [
-        full_name,
-        phone_number,
-        email,
-        lead_status,
-        message,
-        lead_category,
-        website_url,
-        country_code,
-        lead_id,
-      ],
-      (err, result) => {
-        if (err) {
-          console.error("Database error updating lead:", err.message);
-          return res.status(500).json({ message: err.message });
+      "SELECT * FROM crm_tbl_leads WHERE lead_id = ? OR uuid = ?",
+      [lead_id, lead_id],
+      (fetchErr, rows) => {
+        if (fetchErr) {
+          console.error("Error fetching lead for update:", fetchErr.message);
+          return res.status(500).json({ message: "Database Error" });
         }
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Lead Not Found!." });
+        if (rows.length === 0) {
+          return res.status(404).json({ message: "Lead Not Found" });
         }
 
-        // Fetch the updated lead to return it
+        const currentLead = rows[0];
+        const actualLeadId = currentLead.lead_id;
+
+        // 2. Map frontend fields to backend columns and merge with current values
+        const full_name = updateData.full_name || updateData.name || currentLead.full_name;
+        const phone_number = updateData.phone_number || updateData.phone || currentLead.phone_number;
+        const email = updateData.email || currentLead.email;
+        const lead_status = updateData.lead_status || updateData.leadType || currentLead.lead_status;
+        const message = updateData.message || updateData.notes || updateData.projectDescription || currentLead.message;
+        const lead_category = updateData.lead_category || updateData.projectCategory || currentLead.lead_category;
+        const website_url = updateData.website_url || updateData.website || currentLead.website_url;
+        const country_code = updateData.country_code || updateData.countryCode || currentLead.country_code;
+
+        const updateQuery = `UPDATE crm_tbl_leads SET 
+          full_name = ?, 
+          phone_number = ?, 
+          email = ?, 
+          lead_status = ?, 
+          message = ?, 
+          lead_category = ?, 
+          website_url = ?,
+          country_code = ?,
+          updated_by = ?
+          WHERE lead_id = ?;`;
+
         db.query(
-          "SELECT * FROM crm_tbl_leads WHERE lead_id = ?",
-          [lead_id],
-          (err, leads) => {
-            if (err) {
-              return res
-                .status(200)
-                .json({ message: "Lead Updated Successfully!." });
+          updateQuery,
+          [
+            full_name,
+            phone_number,
+            email,
+            lead_status,
+            message,
+            lead_category,
+            website_url,
+            country_code,
+            req.user.admin_id,
+            actualLeadId,
+          ],
+          (updateErr, result) => {
+            if (updateErr) {
+              console.error("Database error updating lead:", updateErr.message);
+              return res.status(500).json({ message: updateErr.message });
             }
-            res.status(200).json({
-              message: "Lead Updated Successfully!.",
-              lead: leads[0],
-            });
+
+            // 3. Fetch the fully updated lead to return it (aliased for frontend)
+            db.query(
+              "SELECT *, lead_id AS id FROM crm_tbl_leads WHERE lead_id = ?",
+              [actualLeadId],
+              (selectErr, updatedLeads) => {
+                if (selectErr) {
+                  return res.status(200).json({ message: "Lead Updated Successfully" });
+                }
+                res.status(200).json({
+                  message: "Lead Updated Successfully",
+                  lead: updatedLeads[0],
+                });
+              },
+            );
           },
         );
       },
     );
   } catch (err) {
     console.error("Catch block error updating lead:", err.message);
-    return res.status(500).json({ message: "Server Error!." });
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
 const getLeads = (req, res) => {
   try {
-    const query = `SELECT * FROM crm_tbl_leads`;
+    const query = `SELECT *, lead_id AS id FROM crm_tbl_leads`;
     db.query(query, (err, result) => {
       if (err) {
         return res.status(500).json({ message: err.message });

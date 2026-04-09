@@ -169,7 +169,7 @@ const createLeadsTable = async () => {
         await runQueryOn(conn, "ALTER TABLE crm_tbl_clients DROP FOREIGN KEY IF EXISTS fk_client_lead", "Dropped client FK");
 
         // Rename primary key column
-        await runQueryOn(conn, "ALTER TABLE crm_tbl_leads RENAME COLUMN id TO lead_id", "Renamed id -> lead_id", "Error renaming column:");
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_leads CHANGE COLUMN id lead_id INT AUTO_INCREMENT", "Renamed id -> lead_id", "Error renaming column:");
 
         // Add audit columns if missing
         if (!hasCreatedBy) {
@@ -211,53 +211,179 @@ const createLeadsTable = async () => {
 
 
 // Followups (depends on crm_tbl_leads)
-const createNewFollowupsTable = () => {
-  return runQuery(
-    `CREATE TABLE IF NOT EXISTS crm_tbl_followups (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        uuid VARCHAR(100) UNIQUE,
-        followup_title VARCHAR(100) NOT NULL,
-        followup_description TEXT,
-        followup_datetime DATETIME NOT NULL,
-        followup_mode ENUM('Call','Email','Whatsapp','Meeting') NOT NULL,
-        followup_status ENUM('Pending','Completed','Reschedule','Cancelled') NOT NULL DEFAULT 'Pending',
-        followup_priority ENUM('High','Medium','Low') NOT NULL DEFAULT 'Medium',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        lead_id INT NULL,
-        project_id INT NULL,
-        INDEX (lead_id),
-        INDEX (project_id),
-        FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE CASCADE,
-        FOREIGN KEY (project_id) REFERENCES crm_tbl_projects(project_id) ON DELETE SET NULL
-      )`,
-    "Followups Table Created",
-    "Error Creating Followups Table:",
-  );
+const createNewFollowupsTable = async () => {
+  let conn;
+  try {
+    conn = await getConnection();
+    
+    // Check if table exists and what columns it has
+    const columns = await new Promise((resolve) => {
+      conn.query("SHOW COLUMNS FROM crm_tbl_followups", (err, cols) => {
+        if (err) resolve(null); // null means table doesn't exist
+        else resolve(cols);
+      });
+    });
+
+    if (!columns) {
+      // Table doesn't exist - create fresh
+      await runQueryOn(conn,
+        `CREATE TABLE IF NOT EXISTS crm_tbl_followups (
+          followup_id INT AUTO_INCREMENT PRIMARY KEY,
+          uuid VARCHAR(100) UNIQUE,
+          followup_title VARCHAR(100) NOT NULL,
+          followup_description TEXT,
+          followup_datetime DATETIME NOT NULL,
+          followup_mode ENUM('Call','Email','Whatsapp','Meeting') NOT NULL,
+          followup_status ENUM('Pending','Completed','Reschedule','Cancelled') NOT NULL DEFAULT 'Pending',
+          followup_priority ENUM('High','Medium','Low') NOT NULL DEFAULT 'Medium',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          lead_id INT NULL,
+          project_id INT NULL,
+          created_by INT NULL,
+          updated_by INT NULL,
+          INDEX (lead_id),
+          INDEX (project_id),
+          FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE CASCADE,
+          FOREIGN KEY (project_id) REFERENCES crm_tbl_projects(project_id) ON DELETE SET NULL
+        )`,
+        "Followups Table Created",
+        "Error Creating Followups Table:"
+      );
+    } else {
+      const hasId = columns.some(col => col.Field === 'id');
+      const hasFollowupId = columns.some(col => col.Field === 'followup_id');
+      const hasCreatedBy = columns.some(col => col.Field === 'created_by');
+
+      if (hasId && !hasFollowupId) {
+        console.log("Detected old 'id' column in crm_tbl_followups. Running migration...");
+
+        // Disable FK checks locally for structural changes
+        await runQueryOn(conn, "SET FOREIGN_KEY_CHECKS = 0");
+
+        // Drop FK from dependent table
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_followUpSummary DROP FOREIGN KEY IF EXISTS crm_tbl_followUpSummary_ibfk_1", "Dropped summary FK");
+
+        // Rename primary key column
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_followups CHANGE COLUMN id followup_id INT AUTO_INCREMENT", "Renamed id -> followup_id", "Error renaming column:");
+
+        // Add audit columns if missing
+        if (!hasCreatedBy) {
+          await runQueryOn(conn, "ALTER TABLE crm_tbl_followups ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added audit columns");
+        }
+
+        // Re-add FK in dependent table referencing the new column name
+        await runQueryOn(conn,
+          `ALTER TABLE crm_tbl_followUpSummary ADD CONSTRAINT crm_tbl_followUpSummary_ibfk_1 FOREIGN KEY (followup_id) REFERENCES crm_tbl_followups(followup_id) ON DELETE CASCADE`,
+          "Restored summary FK"
+        );
+
+        // Re-enable FK checks
+        await runQueryOn(conn, "SET FOREIGN_KEY_CHECKS = 1");
+        console.log("crm_tbl_followups migration completed successfully!");
+      } else {
+        // Just add missing audit columns if needed
+        if (!hasCreatedBy) {
+          await runQueryOn(conn, "ALTER TABLE crm_tbl_followups ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added missing audit columns");
+        } else {
+          console.log("Followups table is up to date.");
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error in createNewFollowupsTable:", e);
+    if (conn) {
+      conn.query("SET FOREIGN_KEY_CHECKS = 1", () => {});
+    }
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
 // Followup Summary (depends on crm_tbl_followups)
-const createFollowupSummaryTable = () => {
-  return runQuery(
-    `CREATE TABLE IF NOT EXISTS crm_tbl_followUpSummary (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      uuid VARCHAR(250) UNIQUE NOT NULL,
-      followup_id INT NOT NULL,
-      project_id INT NULL,
-      conclusion_message TEXT NOT NULL,
-      completed_at DATETIME NOT NULL,
-      completed_by VARCHAR(100),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (followup_id)
-          REFERENCES crm_tbl_followups(id)
-          ON DELETE CASCADE,
-      FOREIGN KEY (project_id)
-          REFERENCES crm_tbl_projects(project_id)
-          ON DELETE SET NULL
-    )`,
-    "Followup Summary Table Created",
-    "Error Creating Followup Summary Table:",
-  );
+// Followup Summary (depends on crm_tbl_followups)
+const createFollowupSummaryTable = async () => {
+  let conn;
+  try {
+    conn = await getConnection();
+    
+    // Check if table exists and what columns it has
+    const columns = await new Promise((resolve) => {
+      conn.query("SHOW COLUMNS FROM crm_tbl_followUpSummary", (err, cols) => {
+        if (err) resolve(null); // null means table doesn't exist
+        else resolve(cols);
+      });
+    });
+
+    if (!columns) {
+      // Table doesn't exist - create fresh
+      await runQueryOn(conn,
+        `CREATE TABLE IF NOT EXISTS crm_tbl_followUpSummary (
+          followup_summary_id INT AUTO_INCREMENT PRIMARY KEY,
+          uuid VARCHAR(250) UNIQUE NOT NULL,
+          followup_id INT NOT NULL,
+          conclusion_message TEXT NOT NULL,
+          completed_at DATETIME NOT NULL,
+          completed_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_by INT NULL,
+          updated_by INT NULL,
+          FOREIGN KEY (followup_id)
+              REFERENCES crm_tbl_followups(followup_id)
+              ON DELETE CASCADE
+        )`,
+        "Followup Summary Table Created (Normalized)",
+        "Error Creating Followup Summary Table:"
+      );
+    } else {
+      const hasId = columns.some(col => col.Field === 'id');
+      const hasSummaryId = columns.some(col => col.Field === 'followup_summary_id');
+      const hasUpdatedBy = columns.some(col => col.Field === 'updated_by');
+      const hasProjectId = columns.some(col => col.Field === 'project_id');
+
+      // Migration: Drop redundant project_id if it exists
+      if (hasProjectId) {
+        console.log("Normalizing crm_tbl_followUpSummary: dropping redundant project_id column...");
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_followUpSummary DROP FOREIGN KEY IF EXISTS crm_tbl_followUpSummary_ibfk_2");
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_followUpSummary DROP COLUMN project_id", "Dropped project_id column", "Error dropping project_id column:");
+      }
+
+      if (hasId && !hasSummaryId) {
+        console.log("Detected old 'id' column in crm_tbl_followUpSummary. Running migration...");
+        
+        // Rename primary key column
+        await runQueryOn(conn, 
+          "ALTER TABLE crm_tbl_followUpSummary CHANGE COLUMN id followup_summary_id INT AUTO_INCREMENT", 
+          "Renamed id -> followup_summary_id", 
+          "Error renaming column:"
+        );
+
+        // Add audit columns
+        if (!hasUpdatedBy) {
+          await runQueryOn(conn, 
+            "ALTER TABLE crm_tbl_followUpSummary ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL, ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP", 
+            "Added audit columns to Followup Summary", 
+            "Error adding audit columns:"
+          );
+        }
+        console.log("crm_tbl_followUpSummary migration completed successfully!");
+      } else if (!hasUpdatedBy) {
+        // Table already uses followup_summary_id but missing audit columns
+        await runQueryOn(conn, 
+          "ALTER TABLE crm_tbl_followUpSummary ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL, ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP", 
+          "Added missing audit columns to Followup Summary", 
+          "Error adding audit columns:"
+        );
+      } else {
+        console.log("Followup Summary table is up to date.");
+      }
+    }
+  } catch (e) {
+    console.error("Error in createFollowupSummaryTable:", e);
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
 // AI Models (no dependencies)
@@ -295,24 +421,7 @@ const createAiModelsTable = async () => {
 
       if (result[0].count === 0) {
         try {
-          // Model 1: Gemini
-          await new Promise((res, rej) => {
-            db.query(
-              insertQuery,
-              [
-                uuidv4(),
-                "Gemini 1.5 Flash",
-                "gemini",
-                "gemini-1.5-flash",
-                "YOUR_API_KEY_HERE",
-                0,
-              ],
-              (err) => (err ? rej(err) : res()),
-            );
-          });
-          console.log("Seeded: Gemini 1.5 Flash");
-
-          // Model 2: Llama 3 (Groq) - DEFAULT
+          // Seed: Llama 3 (Groq) - DEFAULT
           await new Promise((res, rej) => {
             db.query(
               insertQuery,
@@ -342,59 +451,137 @@ const createAiModelsTable = async () => {
   });
 };
 
-const createClientsTable = () => {
-  return runQuery(
-    `CREATE TABLE IF NOT EXISTS crm_tbl_clients (
-      client_id INT AUTO_INCREMENT PRIMARY KEY,
-      uuid CHAR(36) NOT NULL UNIQUE,
-      organisation_name VARCHAR(255) NOT NULL,
-      client_name VARCHAR(255),
-      client_country VARCHAR(100),
-      client_state VARCHAR(100) DEFAULT '',
-      client_currency VARCHAR(10),
-      client_status ENUM('Active', 'Inactive') DEFAULT 'Active',
-      lead_id INT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      CONSTRAINT fk_client_lead
-          FOREIGN KEY (lead_id)
-          REFERENCES crm_tbl_leads(lead_id)
-          ON DELETE SET NULL
-          ON UPDATE CASCADE
-    )`,
-    "Clients Table Created",
-    "Error Creating Clients Table:",
-  );
+const createClientsTable = async () => {
+  let conn;
+  try {
+    conn = await getConnection();
+    
+    // Check if table exists and what columns it has
+    const columns = await new Promise((resolve) => {
+      conn.query("SHOW COLUMNS FROM crm_tbl_clients", (err, cols) => {
+        if (err) resolve(null); // null means table doesn't exist
+        else resolve(cols);
+      });
+    });
+
+    if (!columns) {
+      // Table doesn't exist - create fresh
+      await runQueryOn(conn,
+        `CREATE TABLE IF NOT EXISTS crm_tbl_clients (
+          client_id INT AUTO_INCREMENT PRIMARY KEY,
+          uuid CHAR(36) NOT NULL UNIQUE,
+          organisation_name VARCHAR(255) NOT NULL,
+          client_name VARCHAR(255),
+          client_country VARCHAR(100),
+          client_state VARCHAR(100) DEFAULT '',
+          client_currency VARCHAR(10),
+          client_status ENUM('Active', 'Inactive') DEFAULT 'Active',
+          lead_id INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_by INT NULL,
+          updated_by INT NULL,
+          CONSTRAINT fk_client_lead
+              FOREIGN KEY (lead_id)
+              REFERENCES crm_tbl_leads(lead_id)
+              ON DELETE SET NULL
+              ON UPDATE CASCADE
+        )`,
+        "Clients Table Created",
+        "Error Creating Clients Table:"
+      );
+    } else {
+      const hasCreatedBy = columns.some(col => col.Field === 'created_by');
+      const hasUpdatedBy = columns.some(col => col.Field === 'updated_by');
+
+      if (!hasCreatedBy || !hasUpdatedBy) {
+        console.log("Detected missing audit columns in crm_tbl_clients. Running migration...");
+        
+        let alterQuery = "ALTER TABLE crm_tbl_clients ";
+        let additions = [];
+        if (!hasCreatedBy) additions.push("ADD COLUMN created_by INT NULL");
+        if (!hasUpdatedBy) additions.push("ADD COLUMN updated_by INT NULL");
+        
+        alterQuery += additions.join(", ");
+        
+        await runQueryOn(conn, alterQuery, "Added audit columns to Clients", "Error adding audit columns to Clients:");
+      } else {
+        console.log("Clients table is up to date.");
+      }
+    }
+  } catch (e) {
+    console.error("Error in createClientsTable:", e);
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
-const createProjectsTable = () => {
-  return runQuery(
-    `CREATE TABLE IF NOT EXISTS crm_tbl_projects (
-    project_id INT AUTO_INCREMENT PRIMARY KEY,
-    uuid CHAR(36) NOT NULL UNIQUE,
-    project_name VARCHAR(250) NOT NULL,
-    project_description TEXT,
-    project_category ENUM('Tech','Social Media','Both') DEFAULT 'Tech',
-    project_status ENUM('Hold','In Progress','Completed') DEFAULT 'In Progress',
-    project_priority ENUM('High','Medium','Low') DEFAULT 'High',
-    project_budget INT,
-    onboarding_date DATE,
-    deadline_date DATE,
-    scope_document VARCHAR(500),
-    client_id INT,
+const createProjectsTable = async () => {
+  let conn;
+  try {
+    conn = await getConnection();
+    
+    // Check if table exists and what columns it has
+    const columns = await new Promise((resolve) => {
+      conn.query("SHOW COLUMNS FROM crm_tbl_projects", (err, cols) => {
+        if (err) resolve(null); // null means table doesn't exist
+        else resolve(cols);
+      });
+    });
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    if (!columns) {
+      // Table doesn't exist - create fresh
+      await runQueryOn(conn,
+        `CREATE TABLE IF NOT EXISTS crm_tbl_projects (
+          project_id INT AUTO_INCREMENT PRIMARY KEY,
+          uuid CHAR(36) NOT NULL UNIQUE,
+          project_name VARCHAR(250) NOT NULL,
+          project_description TEXT,
+          project_category ENUM('Tech','Social Media','Both') DEFAULT 'Tech',
+          project_status ENUM('Hold','In Progress','Completed') DEFAULT 'In Progress',
+          project_priority ENUM('High','Medium','Low') DEFAULT 'High',
+          project_budget INT,
+          onboarding_date DATE,
+          deadline_date DATE,
+          scope_document VARCHAR(500),
+          client_id INT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_by INT NULL,
+          updated_by INT NULL,
+          CONSTRAINT fk_project_client
+              FOREIGN KEY (client_id)
+              REFERENCES crm_tbl_clients(client_id)
+              ON DELETE CASCADE
+              ON UPDATE CASCADE
+        )`,
+        "Projects Table Created",
+        "Error Creating Projects Table:"
+      );
+    } else {
+      const hasCreatedBy = columns.some(col => col.Field === 'created_by');
+      const hasUpdatedBy = columns.some(col => col.Field === 'updated_by');
 
-    CONSTRAINT fk_project_client
-        FOREIGN KEY (client_id)
-        REFERENCES crm_tbl_clients(client_id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-)`,
-    "Projects Table Created",
-    "Error Creating Projects Table:",
-  );
+      if (!hasCreatedBy || !hasUpdatedBy) {
+        console.log("Detected missing audit columns in crm_tbl_projects. Running migration...");
+        
+        let alterQuery = "ALTER TABLE crm_tbl_projects ";
+        let additions = [];
+        if (!hasCreatedBy) additions.push("ADD COLUMN created_by INT NULL");
+        if (!hasUpdatedBy) additions.push("ADD COLUMN updated_by INT NULL");
+        
+        alterQuery += additions.join(", ");
+        
+        await runQueryOn(conn, alterQuery, "Added audit columns to Projects", "Error adding audit columns to Projects:");
+      } else {
+        console.log("Projects table is up to date.");
+      }
+    }
+  } catch (e) {
+    console.error("Error in createProjectsTable:", e);
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
 const createEnquiriesTable = () => {

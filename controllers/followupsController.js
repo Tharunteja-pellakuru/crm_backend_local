@@ -34,8 +34,8 @@ const createNewFollowup = async (req, res) => {
     const query = `
         INSERT INTO crm_tbl_followups (
           uuid, followup_title, followup_description, followup_datetime, 
-          followup_mode, followup_status, followup_priority, lead_id, project_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          followup_mode, followup_status, followup_priority, lead_id, project_id, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
     const capitalize = (s) => {
@@ -81,6 +81,7 @@ const createNewFollowup = async (req, res) => {
           formattedPriority,
           leadIdToInsert,
           projectId || null,
+          req.user.admin_id,
         ],
         (err, result) => {
           if (err) {
@@ -94,7 +95,7 @@ const createNewFollowup = async (req, res) => {
           if (formattedStatus === "Completed") {
             const summaryUuid = uuidv4();
             const querySummary = `
-              INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
+              INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
               VALUES (?, ?, ?, ?, ?, ?)
             `;
 
@@ -108,10 +109,10 @@ const createNewFollowup = async (req, res) => {
               [
                 summaryUuid,
                 followupId,
-                projectId || null,
                 follow_brief || "",
                 formattedCompletedAt,
-                "System",
+                completed_by || "System",
+                req.user.admin_id,
               ],
               (summaryErr) => {
                 if (summaryErr) {
@@ -148,7 +149,7 @@ const getAllFollowups = async (req, res) => {
            p.project_name as projectName, p.client_id as mappedClientId,
            COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
     FROM crm_tbl_followups f
-    LEFT JOIN crm_tbl_followUpSummary s ON f.id = s.followup_id
+    LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
     LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
     ORDER BY f.followup_datetime ASC
   `;
@@ -158,7 +159,7 @@ const getAllFollowups = async (req, res) => {
       return res.status(500).json({ message: "Database error" });
     }
     const transformedResults = results.map((f) => ({
-      id: f.id,
+      id: f.followup_id,
       uuid: f.uuid,
       leadId: f.originalLeadId || f.lead_id,
       clientId: f.mappedClientId || f.lead_id,
@@ -209,8 +210,8 @@ const updateFollowup = async (req, res) => {
   const query = `
     UPDATE crm_tbl_followups 
     SET followup_title = ?, followup_description = ?, followup_datetime = ?, 
-        followup_mode = ?, followup_status = ?, followup_priority = ?, project_id = ?
-    WHERE id = ?
+        followup_mode = ?, followup_status = ?, followup_priority = ?, project_id = ?, updated_by = ?
+    WHERE followup_id = ?
   `;
 
   const capitalize = (s) => {
@@ -233,6 +234,7 @@ const updateFollowup = async (req, res) => {
       formattedStatus,
       formattedPriority,
       projectId || null,
+      req.user.admin_id,
       id,
     ],
     (err, result) => {
@@ -256,8 +258,8 @@ const updateFollowup = async (req, res) => {
             : new Date().toISOString().slice(0, 19).replace("T", " ");
 
           const querySummary = `
-            INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
-            VALUES (?, ?, (SELECT project_id FROM crm_tbl_followups WHERE id = ?), ?, ?, ?)
+            INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
           `;
 
           db.query(
@@ -265,10 +267,10 @@ const updateFollowup = async (req, res) => {
             [
               summaryUuid,
               id,
-              id,
               follow_brief,
               formattedCompletedAt,
               completed_by || "System",
+              req.user.admin_id,
             ],
             (summaryErr) => {
               if (summaryErr) {
@@ -315,7 +317,7 @@ const deleteFollowup = async (req, res) => {
     }
 
     // Then delete the followup itself
-    const query = "DELETE FROM crm_tbl_followups WHERE id = ?";
+    const query = "DELETE FROM crm_tbl_followups WHERE followup_id = ?";
     db.query(query, [id], (err, result) => {
       if (err) {
         console.error("Error deleting followup:", err);
@@ -351,8 +353,8 @@ const toggleFollowupStatus = async (req, res) => {
 
   // Use a transaction or sequential execution
   const queryUpdate =
-    "UPDATE crm_tbl_followups SET followup_status = ? WHERE id = ?";
-  db.query(queryUpdate, [formattedStatus, id], (err, result) => {
+    "UPDATE crm_tbl_followups SET followup_status = ?, updated_by = ? WHERE followup_id = ?";
+  db.query(queryUpdate, [formattedStatus, req.user.admin_id, id], (err, result) => {
     if (err) {
       console.error("Error toggling followup status:", err);
       return res.status(500).json({ message: "Database error" });
@@ -370,15 +372,14 @@ const toggleFollowupStatus = async (req, res) => {
 
         const summaryUuid = uuidv4();
         const querySummary = `
-          INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, project_id, conclusion_message, completed_at, completed_by)
-          VALUES (?, ?, (SELECT project_id FROM crm_tbl_followups WHERE id = ?), ?, ?, ?)
+          INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
+          VALUES (?, ?, ?, ?, ?, ?)
         `;
 
         db.query(
           querySummary,
           [
             summaryUuid,
-            id,
             id,
             brief || "",
             completed_at
@@ -389,6 +390,7 @@ const toggleFollowupStatus = async (req, res) => {
                   .slice(0, 19)
                   .replace("T", " "),
             completed_by || "System",
+            req.user.admin_id,
           ],
           (summaryErr) => {
             if (summaryErr) {
@@ -432,7 +434,7 @@ const getClientFollowups = async (req, res) => {
            p.project_name as projectName, p.client_id as mappedClientId,
            COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
     FROM crm_tbl_followups f
-    LEFT JOIN crm_tbl_followUpSummary s ON f.id = s.followup_id
+    LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
     LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
     WHERE f.lead_id = ? 
        OR f.lead_id = (SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?)
@@ -447,7 +449,7 @@ const getClientFollowups = async (req, res) => {
     }
 
     const transformedResults = results.map((f) => ({
-      id: f.id,
+      id: f.followup_id,
       uuid: f.uuid,
       leadId: f.originalLeadId || f.lead_id,
       clientId: f.mappedClientId || f.lead_id,

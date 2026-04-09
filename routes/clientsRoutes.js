@@ -26,9 +26,11 @@ const upload = multer({
   },
 });
 
-router.post("/add-client", createClient);
-router.post("/convert-lead", upload.single("scope_document"), convertLead);
-router.get("/get-clients", getClients);
-router.put("/update-client/:id", updateClient);
+const { authenticateToken } = require("../middleware/authMiddleware");
+
+router.post("/add-client", authenticateToken, createClient);
+router.post("/convert-lead", authenticateToken, upload.single("scope_document"), convertLead);
+router.get("/get-clients", authenticateToken, getClients);
+router.put("/update-client/:id", authenticateToken, updateClient);
 
 module.exports = router;
