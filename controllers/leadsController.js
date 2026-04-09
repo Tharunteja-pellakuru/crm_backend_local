@@ -14,13 +14,12 @@ const createLead = (req, res) => {
       website_url,
       email,
       message,
-      country,
       country_code,
       enquiry_id,
     } = req.body;
 
 
-    console.log(full_name, phone_number, lead_category, lead_status, website_url, email, message, country, country_code, enquiry_id);
+    console.log(full_name, phone_number, lead_category, lead_status, website_url, email, message, country_code, enquiry_id);
 
     // Validation
     const error = validateRequest(req.body, {
@@ -43,9 +42,8 @@ const createLead = (req, res) => {
       website_url,
       email,     
       message,
-      country,
       country_code,
-      enquiry_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+      enquiry_id) VALUES (?,?,?,?,?,?,?,?,?,?)`;
 
     db.query(
       query,
@@ -58,7 +56,6 @@ const createLead = (req, res) => {
         website_url,
         email,
         message,
-        country,
         country_code,
         enquiry_id,
       ],
@@ -70,7 +67,7 @@ const createLead = (req, res) => {
 
         // Fetch the created lead to return it
         db.query(
-          "SELECT * FROM crm_tbl_leads WHERE id = ?",
+          "SELECT * FROM crm_tbl_leads WHERE lead_id = ?",
           [result.insertId],
           (err, leads) => {
             if (err) {
@@ -93,7 +90,7 @@ const createLead = (req, res) => {
 
 const updateLead = (req, res) => {
   try {
-    const { id } = req.params;
+    const { id: lead_id } = req.params;
     const {
       full_name,
       phone_number,
@@ -102,7 +99,6 @@ const updateLead = (req, res) => {
       message,
       lead_category,
       website_url,
-      country,
       country_code,
     } = req.body;
 
@@ -114,9 +110,8 @@ const updateLead = (req, res) => {
       message = ?, 
       lead_category = ?, 
       website_url = ?,
-      country = ?,
       country_code = ?
-      WHERE id = ?;`;
+      WHERE lead_id = ?;`;
 
     db.query(
       query,
@@ -128,9 +123,8 @@ const updateLead = (req, res) => {
         message,
         lead_category,
         website_url,
-        country,
         country_code,
-        id,
+        lead_id,
       ],
       (err, result) => {
         if (err) {
@@ -143,8 +137,8 @@ const updateLead = (req, res) => {
 
         // Fetch the updated lead to return it
         db.query(
-          "SELECT * FROM crm_tbl_leads WHERE id = ?",
-          [id],
+          "SELECT * FROM crm_tbl_leads WHERE lead_id = ?",
+          [lead_id],
           (err, leads) => {
             if (err) {
               return res
@@ -183,10 +177,10 @@ const getLeads = (req, res) => {
 
 const deleteLead = (req, res) => {
   try {
-    const { id } = req.params;
+    const { id: lead_id } = req.params;
 
     // Fetch the lead to get its associated enquiry_id before deleting
-    db.query("SELECT enquiry_id FROM crm_tbl_leads WHERE id = ? OR uuid = ?", [id, id], (fetchErr, rows) => {
+    db.query("SELECT enquiry_id FROM crm_tbl_leads WHERE lead_id = ? OR uuid = ?", [lead_id, lead_id], (fetchErr, rows) => {
       if (!fetchErr && rows.length > 0) {
         const eid = rows[0].enquiry_id;
         if (eid) {
@@ -197,8 +191,8 @@ const deleteLead = (req, res) => {
         }
       }
 
-      const query = `DELETE FROM crm_tbl_leads WHERE id = ? OR uuid = ?;`;
-      db.query(query, [id, id], (err, result) => {
+      const query = `DELETE FROM crm_tbl_leads WHERE lead_id = ? OR uuid = ?;`;
+      db.query(query, [lead_id, lead_id], (err, result) => {
         if (err) {
           console.error("Database error deleting lead:", err.message);
           return res.status(500).json({ message: err.message });

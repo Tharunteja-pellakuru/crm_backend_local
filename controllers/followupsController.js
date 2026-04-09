@@ -50,7 +50,7 @@ const createNewFollowup = async (req, res) => {
 
     const resolveLeadId = (id, callback) => {
       // First check if it's a valid lead_id
-      db.query("SELECT id FROM crm_tbl_leads WHERE id = ?", [id], (err, leads) => {
+      db.query("SELECT lead_id FROM crm_tbl_leads WHERE lead_id = ?", [id], (err, leads) => {
         if (!err && leads.length > 0) {
           return callback(id);
         }

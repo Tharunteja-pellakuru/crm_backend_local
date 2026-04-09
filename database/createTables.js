@@ -2,7 +2,7 @@ const db = require("../config/db");
 const bcrypt = require("bcrypt");
 const { v4: uuidv4 } = require("uuid");
 
-// Helper to run a query as a promise
+// Helper to run a query as a promise (uses pool - any connection)
 const runQuery = (query, successMsg, errorMsg) => {
   return new Promise((resolve) => {
     db.query(query, (err) => {
@@ -12,6 +12,30 @@ const runQuery = (query, successMsg, errorMsg) => {
         console.log(successMsg);
       }
       resolve();
+    });
+  });
+};
+
+// Helper to run a query on a SPECIFIC connection (required for session-level SET statements)
+const runQueryOn = (conn, query, successMsg = null, errorMsg = null) => {
+  return new Promise((resolve) => {
+    conn.query(query, (err) => {
+      if (err) {
+        if (errorMsg) console.error(errorMsg, err);
+      } else {
+        if (successMsg) console.log(successMsg);
+      }
+      resolve();
+    });
+  });
+};
+
+// Get a dedicated connection from the pool
+const getConnection = () => {
+  return new Promise((resolve, reject) => {
+    db.getConnection((err, conn) => {
+      if (err) reject(err);
+      else resolve(conn);
     });
   });
 };
@@ -86,29 +110,105 @@ const createUsersTable = async () => {
   });
 };
 
-// Leads
-const createLeadsTable = () => {
-  return runQuery(
-    `CREATE TABLE IF NOT EXISTS crm_tbl_leads (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      uuid CHAR(36) UNIQUE,
-      full_name VARCHAR(100) NOT NULL,
-      phone_number VARCHAR(20),
-      email VARCHAR(250),
-      lead_category INT NOT NULL,
-      lead_status VARCHAR(50),
-      website_url TEXT,
-      message TEXT,
-      country VARCHAR(100),
-      country_code VARCHAR(10),
-      enquiry_id INT DEFAULT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`,
-    "Leads Table Created",
-    "Error Creating Leads Table:",
-  );
+// Leads (with automatic migration for id -> lead_id)
+// Uses a dedicated connection to ensure SET FOREIGN_KEY_CHECKS applies to all queries
+const createLeadsTable = async () => {
+  let conn;
+  try {
+    conn = await getConnection();
+    
+    // Disable FK checks on this dedicated connection
+    await runQueryOn(conn, "SET FOREIGN_KEY_CHECKS = 0");
+
+    // Check if table exists and what columns it has
+    const columns = await new Promise((resolve) => {
+      conn.query("SHOW COLUMNS FROM crm_tbl_leads", (err, cols) => {
+        if (err) resolve(null); // null means table doesn't exist
+        else resolve(cols);
+      });
+    });
+
+    if (!columns) {
+      // Table doesn't exist - drop FK constraints from dependent tables first,
+      // then drop any orphaned InnoDB metadata, and finally create fresh.
+      // This prevents errno 150 when existing tables still reference the old crm_tbl_leads.
+      await runQueryOn(conn, "ALTER TABLE crm_tbl_followups DROP FOREIGN KEY IF EXISTS crm_tbl_followups_ibfk_1");
+      await runQueryOn(conn, "ALTER TABLE crm_tbl_clients DROP FOREIGN KEY IF EXISTS fk_client_lead");
+      await runQueryOn(conn, "DROP TABLE IF EXISTS crm_tbl_leads");
+      await runQueryOn(conn,
+        `CREATE TABLE IF NOT EXISTS crm_tbl_leads (
+          lead_id INT AUTO_INCREMENT PRIMARY KEY,
+          uuid CHAR(36) UNIQUE,
+          full_name VARCHAR(100) NOT NULL,
+          phone_number VARCHAR(20),
+          email VARCHAR(250),
+          lead_category INT NOT NULL,
+          lead_status VARCHAR(50),
+          website_url TEXT,
+          message TEXT,
+          country_code VARCHAR(10),
+          enquiry_id INT DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_by INT NULL,
+          updated_by INT NULL
+        )`,
+        "Leads Table Created",
+        "Error Creating Leads Table:"
+      );
+    } else {
+      const hasId = columns.some(col => col.Field === 'id');
+      const hasLeadId = columns.some(col => col.Field === 'lead_id');
+      const hasCreatedBy = columns.some(col => col.Field === 'created_by');
+
+      if (hasId && !hasLeadId) {
+        console.log("Detected old 'id' column in crm_tbl_leads. Running migration...");
+
+        // Drop FK constraints referencing crm_tbl_leads from dependant tables
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_followups DROP FOREIGN KEY IF EXISTS crm_tbl_followups_ibfk_1", "Dropped followup FK");
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_clients DROP FOREIGN KEY IF EXISTS fk_client_lead", "Dropped client FK");
+
+        // Rename primary key column
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_leads RENAME COLUMN id TO lead_id", "Renamed id -> lead_id", "Error renaming column:");
+
+        // Add audit columns if missing
+        if (!hasCreatedBy) {
+          await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added audit columns", "Error adding audit columns:");
+        }
+
+        // Re-add FK constraints pointing to the new column name
+        await runQueryOn(conn,
+          `ALTER TABLE crm_tbl_followups ADD CONSTRAINT crm_tbl_followups_ibfk_1 FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE CASCADE`,
+          "Restored followup FK", "Error restoring followup FK:"
+        );
+        await runQueryOn(conn,
+          `ALTER TABLE crm_tbl_clients ADD CONSTRAINT fk_client_lead FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE SET NULL ON UPDATE CASCADE`,
+          "Restored client FK", "Error restoring client FK:"
+        );
+
+        console.log("crm_tbl_leads migration completed successfully!");
+      } else {
+        // Table already uses lead_id - just add missing audit columns if needed
+        if (!hasCreatedBy) {
+          await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added missing audit columns", "Error adding audit columns:");
+        } else {
+          console.log("Leads table is up to date.");
+        }
+      }
+    }
+
+    // Re-enable FK checks
+    await runQueryOn(conn, "SET FOREIGN_KEY_CHECKS = 1");
+  } catch (e) {
+    console.error("Error in createLeadsTable:", e);
+    if (conn) {
+      conn.query("SET FOREIGN_KEY_CHECKS = 1", () => {});
+    }
+  } finally {
+    if (conn) conn.release();
+  }
 };
+
 
 // Followups (depends on crm_tbl_leads)
 const createNewFollowupsTable = () => {
@@ -128,7 +228,7 @@ const createNewFollowupsTable = () => {
         project_id INT NULL,
         INDEX (lead_id),
         INDEX (project_id),
-        FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(id) ON DELETE CASCADE,
+        FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE CASCADE,
         FOREIGN KEY (project_id) REFERENCES crm_tbl_projects(project_id) ON DELETE SET NULL
       )`,
     "Followups Table Created",
@@ -161,8 +261,9 @@ const createFollowupSummaryTable = () => {
 };
 
 // AI Models (no dependencies)
-const createAiModelsTable = () => {
-  return runQuery(
+const createAiModelsTable = async () => {
+  // Step 1: Create table
+  await runQuery(
     `CREATE TABLE IF NOT EXISTS crm_tbl_aiModels (
       aimodel_id INT AUTO_INCREMENT PRIMARY KEY,
       uuid CHAR(36) NOT NULL UNIQUE,
@@ -179,6 +280,66 @@ const createAiModelsTable = () => {
     "AI Models Table Created",
     "Error Creating AI Models Table:",
   );
+
+  // Step 2: Insert default AI models if none exist
+  const checkQuery = "SELECT COUNT(*) as count FROM crm_tbl_aiModels";
+  const insertQuery = `INSERT INTO crm_tbl_aiModels (uuid, name, provider, model_id, api_key, is_default) VALUES (?, ?, ?, ?, ?, ?)`;
+
+  return new Promise((resolve) => {
+    db.query(checkQuery, async (err, result) => {
+      if (err) {
+        console.error("Error checking for AI models:", err);
+        resolve();
+        return;
+      }
+
+      if (result[0].count === 0) {
+        try {
+          // Model 1: Gemini
+          await new Promise((res, rej) => {
+            db.query(
+              insertQuery,
+              [
+                uuidv4(),
+                "Gemini 1.5 Flash",
+                "gemini",
+                "gemini-1.5-flash",
+                "YOUR_API_KEY_HERE",
+                0,
+              ],
+              (err) => (err ? rej(err) : res()),
+            );
+          });
+          console.log("Seeded: Gemini 1.5 Flash");
+
+          // Model 2: Llama 3 (Groq) - DEFAULT
+          await new Promise((res, rej) => {
+            db.query(
+              insertQuery,
+              [
+                uuidv4(),
+                "Llama 3 (Groq - Ultra Fast)",
+                "groq",
+                "llama-3.3-70b-versatile",
+                "YOUR_API_KEY_HERE",
+                1,
+              ],
+              (err) => (err ? rej(err) : res()),
+            );
+          });
+          console.log("Seeded: Llama 3 (Groq - Ultra Fast) [DEFAULT]");
+
+          resolve();
+        } catch (error) {
+          console.error("Error seeding AI models:", error);
+          resolve();
+        }
+      } else {
+        console.log("AI models already exist, skipping seed");
+        resolve();
+      }
+    });
+  });
 };
 
 const createClientsTable = () => {
@@ -197,7 +358,7 @@ const createClientsTable = () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_client_lead
           FOREIGN KEY (lead_id)
-          REFERENCES crm_tbl_leads(id)
+          REFERENCES crm_tbl_leads(lead_id)
           ON DELETE SET NULL
           ON UPDATE CASCADE
     )`,
@@ -244,12 +405,14 @@ const createEnquiriesTable = () => {
         full_name VARCHAR(250),
         email VARCHAR(250),
         phone_number VARCHAR(20),
-        website_url TEXT DEFAULT (''),
+        website_url TEXT DEFAULT '',
         message TEXT,
         status ENUM('New', 'Hold', 'Dismissed', 'Converted') DEFAULT 'New',
-        remarks TEXT DEFAULT (''),
+        remarks TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_by INT NULL,
+        updated_by INT NULL
     )`,
     "Enquiries Table Created",
     "Error Creating Enquiries Table:",
@@ -258,24 +421,26 @@ const createEnquiriesTable = () => {
 
 // Create all tables in correct order (sequential)
 const createAllTables = async () => {
-  await createUsersTable();
-  await createLeadsTable();
-  await createAiModelsTable();
-  await createClientsTable();
-  await createProjectsTable();
-  await createNewFollowupsTable();
-  await createFollowupSummaryTable();
-  await createEnquiriesTable();
+  try {
+    // ORDER IS LOAD-BEARING: each table may reference one created before it via foreign keys.
+    // crm_tbl_leads must exist before crm_tbl_clients and crm_tbl_followups;
+    // crm_tbl_clients must exist before crm_tbl_projects;
+    // crm_tbl_followups must exist before crm_tbl_followUpSummary.
+    // FK checks are managed inside createLeadsTable() on a dedicated connection;
+    // no pool-level SET FOREIGN_KEY_CHECKS is needed here.
+    await createUsersTable();
+    await createEnquiriesTable();
+    await createLeadsTable();
+    await createAiModelsTable();
+    await createClientsTable();
+    await createProjectsTable();
+    await createNewFollowupsTable();
+    await createFollowupSummaryTable();
+
+    console.log("Database initialization and migration completed successfully.");
+  } catch (error) {
+    console.error("Critical error during database initialization:", error);
+  }
 };
 
-module.exports = {
-  createUsersTable,
-  createLeadsTable,
-  createClientsTable,
-  createNewFollowupsTable,
-  createFollowupSummaryTable,
-  createProjectsTable,
-  createAiModelsTable,
-  createEnquiriesTable,
-  createAllTables,
-};
+module.exports = { createAllTables };

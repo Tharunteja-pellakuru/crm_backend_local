@@ -184,7 +184,7 @@ const exportEnquiries = async (req, res) => {
 const exportLeads = async (req, res) => {
   const query = `
     SELECT
-      l.id AS lead_id,
+      l.lead_id,
       l.uuid,
       l.full_name,
       l.phone_number,
@@ -193,7 +193,6 @@ const exportLeads = async (req, res) => {
       l.lead_category,
       l.website_url,
       l.message,
-      l.country,
       e.enquiry_id,
       e.status AS enquiry_status,
       l.created_at,
@@ -223,7 +222,6 @@ const exportLeads = async (req, res) => {
       "Enquiry Status": row.enquiry_status || "-",
       Website: row.website_url || "-",
       Message: row.message || "-",
-      Country: row.country || "-",
       "Created Date": formatDate(row.created_at),
     }));
 
@@ -238,7 +236,6 @@ const exportLeads = async (req, res) => {
       "Enquiry Status",
       "Website",
       "Message",
-      "Country",
       "Created Date",
     ];
 
@@ -284,7 +281,7 @@ const exportFollowups = async (req, res) => {
       f.created_at
     FROM crm_tbl_followups f
     LEFT JOIN crm_tbl_leads l
-      ON f.lead_id = l.id
+      ON f.lead_id = l.lead_id
     LEFT JOIN crm_tbl_projects p
       ON f.project_id = p.project_id
     ORDER BY f.followup_datetime DESC
@@ -368,7 +365,7 @@ const exportClients = async (req, res) => {
       c.created_at
     FROM crm_tbl_clients c
     LEFT JOIN crm_tbl_leads l
-      ON c.lead_id = l.id
+      ON c.lead_id = l.lead_id
     ORDER BY c.created_at DESC
   `;
 
@@ -530,9 +527,9 @@ const exportAllCRMData = async (req, res) => {
       f.followup_datetime,
       f.followup_status
     FROM crm_tbl_leads l
-    LEFT JOIN crm_tbl_clients c ON c.lead_id = l.id
+    LEFT JOIN crm_tbl_clients c ON c.lead_id = l.lead_id
     LEFT JOIN crm_tbl_projects p ON p.client_id = c.client_id
-    LEFT JOIN crm_tbl_followups f ON f.lead_id = l.id
+    LEFT JOIN crm_tbl_followups f ON f.lead_id = l.lead_id
     ORDER BY l.created_at DESC
   `;
 

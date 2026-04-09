@@ -52,7 +52,7 @@ const createClient = (req, res) => {
       // Update lead status if lead_id is provided
       if (lead_id) {
         const updateLeadQuery =
-          "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE id = ?";
+          "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE lead_id = ?";
         db.query(updateLeadQuery, [lead_id], (leadErr) => {
           if (leadErr) {
             console.error("Error updating lead status:", leadErr.message);
@@ -147,7 +147,7 @@ const getClients = (req, res) => {
       l.website_url AS website,
       l.message AS brief_message
     FROM crm_tbl_clients c
-    LEFT JOIN crm_tbl_leads l ON c.lead_id = l.id
+    LEFT JOIN crm_tbl_leads l ON c.lead_id = l.lead_id
   `;
   db.query(query, (err, result) => {
     if (err) {
@@ -260,7 +260,7 @@ const convertLead = async (req, res) => {
 };
 
 const updateLeadAndCommit = (connection, lead_id, res, clientId) => {
-  const updateQuery = "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE id = ?";
+  const updateQuery = "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE lead_id = ?";
   connection.query(updateQuery, [lead_id], (err) => {
     if (err) {
       return connection.rollback(() => {
