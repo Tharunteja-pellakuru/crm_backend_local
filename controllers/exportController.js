@@ -290,6 +290,18 @@ const exportLeads = async (req, res) => {
 
 // 3. FOLLOW-UPS EXPORT
 const exportFollowups = async (req, res) => {
+  const type = req.query.type; // 'new' or 'reference'
+  let whereClause = "";
+  let typeTitle = "All Follow-ups";
+
+  if (type === "new") {
+    whereClause = "WHERE f.lead_id IS NOT NULL AND f.project_id IS NULL";
+    typeTitle = "New Follow-ups (Leads)";
+  } else if (type === "reference") {
+    whereClause = "WHERE f.project_id IS NOT NULL";
+    typeTitle = "Reference Follow-ups (Active Projects)";
+  }
+
   const query = `
     SELECT
       f.followup_id,
@@ -305,11 +317,11 @@ const exportFollowups = async (req, res) => {
       l.full_name AS lead_name,
       l.phone_number AS lead_phone,
       l.email AS lead_email,
-      -- Project \u0026 Client details
+      -- Project & Client details
       p.project_name,
       c.organisation_name AS client_org,
       c.client_name AS client_person,
-      -- Summary \u0026 Audit
+      -- Summary & Audit
       s.conclusion_message,
       s.completed_at,
       a1.full_name AS created_by_name,
@@ -321,6 +333,7 @@ const exportFollowups = async (req, res) => {
     LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
     LEFT JOIN crm_tbl_admins a1 ON f.created_by = a1.admin_id
     LEFT JOIN crm_tbl_admins a2 ON f.updated_by = a2.admin_id
+    ${whereClause}
     ORDER BY f.followup_datetime DESC
   `;
 
@@ -347,8 +360,8 @@ const exportFollowups = async (req, res) => {
       "Client Organization": row.client_org || "-",
       "Contact Person": row.client_person || "-",
       
-      // Status \u0026 Priority
-      "Scheduled Date \u0026 Time": formatDateTime(row.followup_datetime),
+      // Status & Priority
+      "Scheduled Date & Time": formatDateTime(row.followup_datetime),
       "Mode": row.followup_mode || "-",
       "Status": row.followup_status || "Pending",
       "Priority": row.followup_priority || "Medium",
@@ -376,7 +389,7 @@ const exportFollowups = async (req, res) => {
       "Project Name",
       "Client Organization",
       "Contact Person",
-      "Scheduled Date \u0026 Time",
+      "Scheduled Date & Time",
       "Mode",
       "Status",
       "Priority",
@@ -391,17 +404,85 @@ const exportFollowups = async (req, res) => {
     const workbook = await createExcelWorkbook(
       transformedData,
       headers,
-      "Follow-ups",
-      "CRM Follow-ups Export",
+      "Follow-up Details",
+      `CRM Follow-ups Export - ${typeTitle}`,
     );
+
+    // --- Add Summary Sheet ---
+    const summarySheet = workbook.addWorksheet("Follow-up Summary");
+    
+    // Summary Title
+    const summaryTitleRow = summarySheet.addRow([`Summary Table - ${typeTitle}`]);
+    summaryTitleRow.font = { size: 16, bold: true, color: { argb: "FF18254D" } };
+    summarySheet.mergeCells("A1:C1");
+    summarySheet.addRow([]);
+
+    // Calculate Stats
+    const totalCount = results.length;
+    const statusStats = results.reduce((acc, curr) => {
+      const status = curr.followup_status || "Pending";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const priorityStats = results.reduce((acc, curr) => {
+      const priority = curr.followup_priority || "Medium";
+      acc[priority] = (acc[priority] || 0) + 1;
+      return acc;
+    }, {});
+    const modeStats = results.reduce((acc, curr) => {
+      const mode = curr.followup_mode || "Other";
+      acc[mode] = (acc[mode] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Table Styling Helper
+    const addSectionHeader = (title) => {
+      const row = summarySheet.addRow([title, "Count", "Percentage"]);
+      row.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF18254D" } };
+      return row;
+    };
+
+    // Total Section
+    summarySheet.addRow(["Overall Statistics"]).font = { bold: true };
+    summarySheet.addRow(["Total Records", totalCount, "100%"]);
+    summarySheet.addRow([]);
+
+    // Status Section
+    addSectionHeader("By Status");
+    Object.entries(statusStats).forEach(([status, count]) => {
+      summarySheet.addRow([status, count, `${((count/totalCount)*100).toFixed(1)}%`]);
+    });
+    summarySheet.addRow([]);
+
+    // Priority Section
+    addSectionHeader("By Priority");
+    Object.entries(priorityStats).forEach(([priority, count]) => {
+      summarySheet.addRow([priority, count, `${((count/totalCount)*100).toFixed(1)}%`]);
+    });
+    summarySheet.addRow([]);
+
+    // Mode Section
+    addSectionHeader("By Mode");
+    Object.entries(modeStats).forEach(([mode, count]) => {
+      summarySheet.addRow([mode, count, `${((count/totalCount)*100).toFixed(1)}%`]);
+    });
+
+    // Final Styling for Summary Sheet
+    summarySheet.columns = [
+      { width: 30 },
+      { width: 15 },
+      { width: 15 }
+    ];
 
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
+    const filename = `followups_${type || 'all'}_${new Date().toISOString().split('T')[0]}.xlsx`;
     res.setHeader(
       "Content-Disposition",
-      "attachment; filename=followups_export.xlsx",
+      `attachment; filename=${filename}`,
     );
 
     await workbook.xlsx.write(res);
@@ -425,14 +506,17 @@ const exportClients = async (req, res) => {
       c.client_currency,
       c.client_status,
       l.full_name AS lead_name,
+      GROUP_CONCAT(p.project_name SEPARATOR ', ') AS project_names,
       c.created_at,
       c.updated_at,
       a1.full_name AS created_by_name,
       a2.full_name AS updated_by_name
     FROM crm_tbl_clients c
     LEFT JOIN crm_tbl_leads l ON c.lead_id = l.lead_id
+    LEFT JOIN crm_tbl_projects p ON c.client_id = p.client_id
     LEFT JOIN crm_tbl_admins a1 ON c.created_by = a1.admin_id
     LEFT JOIN crm_tbl_admins a2 ON c.updated_by = a2.admin_id
+    GROUP BY c.client_id
     ORDER BY c.created_at DESC
   `;
 
@@ -449,6 +533,7 @@ const exportClients = async (req, res) => {
       "Client ID": row.client_id,
       "Organization Name": row.organisation_name || "-",
       "Contact Person": row.client_name || "-",
+      "Project Name": row.project_names || "-",
       Country: row.client_country || "-",
       State: row.client_state || "-",
       Currency: row.client_currency || "-",
@@ -465,6 +550,7 @@ const exportClients = async (req, res) => {
       "Client ID",
       "Organization Name",
       "Contact Person",
+      "Project Name",
       "Country",
       "State",
       "Currency",
@@ -515,7 +601,8 @@ const exportProjects = async (req, res) => {
       p.onboarding_date,
       p.deadline_date,
       p.scope_document,
-      c.organisation_name AS client_name,
+      c.client_name,
+      c.organisation_name AS org_name,
       p.created_at,
       p.updated_at,
       a1.full_name AS created_by_name,
@@ -539,6 +626,8 @@ const exportProjects = async (req, res) => {
       "S.No": index + 1,
       "Project ID": row.project_id,
       "Project Name": row.project_name || "-",
+      "Org Name": row.org_name || "-",
+      "Client Name": row.client_name || "-",
       Description: row.project_description || "-",
       Category: row.project_category || "Tech",
       Status: row.project_status || "In Progress",
@@ -546,7 +635,6 @@ const exportProjects = async (req, res) => {
       Budget: row.project_budget
         ? `₹${row.project_budget.toLocaleString("en-IN")}`
         : "-",
-      "Client Name": row.client_name || "-",
       "Onboarding Date": formatDate(row.onboarding_date),
       Deadline: formatDate(row.deadline_date),
       "Scope Document": row.scope_document ? row.scope_document.split('/').pop() : "-",
@@ -560,12 +648,13 @@ const exportProjects = async (req, res) => {
       "S.No",
       "Project ID",
       "Project Name",
+      "Org Name",
+      "Client Name",
       "Description",
       "Category",
       "Status",
       "Priority",
       "Budget",
-      "Client Name",
       "Onboarding Date",
       "Deadline",
       "Scope Document",
