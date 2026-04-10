@@ -2,23 +2,20 @@ const db = require("../config/db.js");
 const { v4: uuidv4 } = require("uuid");
 const { validateRequest } = require("../middleware/validation");
 
-const getEnquiries = (req, res) => {
+const pool = db.promise;
+
+const getEnquiries = async (req, res) => {
   try {
     const query = `SELECT *, enquiry_id AS id FROM crm_tbl_enquiries ORDER BY enquiry_id DESC`;
-    db.query(query, (err, result) => {
-      if (err) {
-        console.error("Error fetching enquiries:", err.message);
-        return res.status(500).json({ message: err.message });
-      }
-      res.status(200).json({ message: "Enquiries Fetched Successfully!", enquiries: result });
-    });
+    const [result] = await pool.query(query);
+    res.status(200).json({ message: "Enquiries Fetched Successfully!", enquiries: result });
   } catch (err) {
-    console.error("Server error fetching enquiries:", err.message);
+    console.error("Error fetching enquiries:", err.message);
     res.status(500).json({ message: "Server Error!" });
   }
 };
 
-const addEnquiry = (req, res) => {
+const addEnquiry = async (req, res) => {
   try {
     const uuid = uuidv4();
     const {
@@ -27,17 +24,17 @@ const addEnquiry = (req, res) => {
       phone_number,
       website_url,
       message,
-      status = 'New',
-      remarks = ''
+      status = "New",
+      remarks = "",
     } = req.body;
-    
+
     // Validation
     const error = validateRequest(req.body, {
       full_name: { required: true, minLength: 2 },
       email: { required: true, pattern: /^\S+@\S+\.\S+$/ },
-      phone_number: { required: true, minLength: 10 }
+      phone_number: { required: true, minLength: 10 },
     });
-    
+
     if (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -45,37 +42,33 @@ const addEnquiry = (req, res) => {
     const admin_id = req.user?.admin_id || null;
     const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, message, status, remarks, created_by) VALUES (?,?,?,?,?,?,?,?,?)`;
 
-    db.query(
-      query,
-      [uuid, full_name, email, phone_number, website_url, message, status, remarks, admin_id],
-      (err, result) => {
-        if (err) {
-          console.error("Error creating enquiry:", err.message);
-          return res.status(500).json({ message: err.message });
-        }
+    const [result] = await pool.query(query, [
+      uuid,
+      full_name,
+      email,
+      phone_number,
+      website_url,
+      message,
+      status,
+      remarks,
+      admin_id,
+    ]);
 
-        db.query(
-          "SELECT * FROM crm_tbl_enquiries WHERE enquiry_id = ?",
-          [result.insertId],
-          (err, enquiries) => {
-            if (err) {
-              return res.status(201).json({ message: "Enquiry Created Successfully!", uuid: uuid });
-            }
-            res.status(201).json({
-              message: "Enquiry Created Successfully!",
-              enquiry: enquiries[0],
-            });
-          }
-        );
-      }
-    );
+    const [enquiries] = await pool.query("SELECT * FROM crm_tbl_enquiries WHERE enquiry_id = ?", [
+      result.insertId,
+    ]);
+
+    res.status(201).json({
+      message: "Enquiry Created Successfully!",
+      enquiry: enquiries[0],
+    });
   } catch (err) {
-    console.error("Server error creating enquiry:", err.message);
+    console.error("Error creating enquiry:", err.message);
     res.status(500).json({ message: "Server Error!" });
   }
 };
 
-const updateEnquiryStatus = (req, res) => {
+const updateEnquiryStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, remarks, message } = req.body;
@@ -97,63 +90,66 @@ const updateEnquiryStatus = (req, res) => {
     query += ` WHERE enquiry_id = ? OR uuid = ?`;
     params.push(id, id);
 
-    db.query(query, params, (err, result) => {
-      if (err) {
-        console.error("Error updating enquiry status:", err.message);
-        return res.status(500).json({ message: err.message });
-      }
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Enquiry Not Found!" });
-      }
+    const [result] = await pool.query(query, params);
 
-      // If status is restored to something other than Converted, delete the associated lead
-      if (status !== 'Converted') {
-        db.query("SELECT enquiry_id FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?", [id, id], (err, rows) => {
-          if (!err && rows.length > 0) {
-            const eid = rows[0].enquiry_id;
-            db.query("DELETE FROM crm_tbl_leads WHERE enquiry_id = ?", [eid], (err) => {
-              if (err) console.error("Error deleting linked lead:", err.message);
-            });
-          }
-        });
-      }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Enquiry Not Found!" });
+    }
 
-      res.status(200).json({ message: "Enquiry Status Updated Successfully!" });
-    });
+    // If status is restored to something other than Converted, delete the associated lead
+    if (status !== "Converted") {
+      try {
+        const [rows] = await pool.query(
+          "SELECT enquiry_id FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?",
+          [id, id],
+        );
+        if (rows.length > 0) {
+          const eid = rows[0].enquiry_id;
+          await pool.query("DELETE FROM crm_tbl_leads WHERE enquiry_id = ?", [eid]);
+        }
+      } catch (leadErr) {
+        console.error("Error deleting linked lead in updateEnquiryStatus:", leadErr.message);
+      }
+    }
+
+    res.status(200).json({ message: "Enquiry Status Updated Successfully!" });
   } catch (err) {
-    console.error("Server error updating enquiry:", err.message);
+    console.error("Error updating enquiry status:", err.message);
     res.status(500).json({ message: "Server Error!" });
   }
 };
 
-const deleteEnquiry = (req, res) => {
+const deleteEnquiry = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Fetch the actual enquiry_id to safely delete any linked leads
-    db.query("SELECT enquiry_id FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?", [id, id], (selectErr, rows) => {
-      if (!selectErr && rows.length > 0) {
-        const eid = rows[0].enquiry_id;
-        // Delete the associated lead, ensuring no orphaned leads if the enquiry is deleted
-        db.query("DELETE FROM crm_tbl_leads WHERE enquiry_id = ?", [eid], (deleteErr) => {
-          if (deleteErr) console.error("Error deleting linked lead:", deleteErr.message);
-        });
-      }
+    // Fetch actual enquiry_id first
+    const [rows] = await pool.query(
+      "SELECT enquiry_id FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?",
+      [id, id],
+    );
 
-      const query = `DELETE FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?`;
-      db.query(query, [id, id], (err, result) => {
-        if (err) {
-          console.error("Error deleting enquiry:", err.message);
-          return res.status(500).json({ message: err.message });
-        }
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Enquiry Not Found!" });
-        }
-        res.status(200).json({ message: "Enquiry Deleted Successfully!" });
-      });
-    });
+    if (rows.length > 0) {
+      const eid = rows[0].enquiry_id;
+      // 1. Delete associated leads first to maintain order
+      try {
+        await pool.query("DELETE FROM crm_tbl_leads WHERE enquiry_id = ?", [eid]);
+      } catch (leadErr) {
+        console.error("Error deleting linked leads in deleteEnquiry:", leadErr.message);
+      }
+    }
+
+    // 2. Delete the enquiry itself
+    const query = `DELETE FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?`;
+    const [result] = await pool.query(query, [id, id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Enquiry Not Found!" });
+    }
+
+    res.status(200).json({ message: "Enquiry Deleted Successfully!" });
   } catch (err) {
-    console.error("Server error deleting enquiry:", err.message);
+    console.error("Error deleting enquiry:", err.message);
     res.status(500).json({ message: "Server Error!" });
   }
 };

@@ -2,9 +2,9 @@ const db = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
 const { validateRequest } = require("../middleware/validation");
 
+const pool = db.promise;
+
 // Helper to safely format a MySQL DATE/DATETIME value to YYYY-MM-DD string.
-// MySQL driver returns JS Date objects which get serialized as UTC,
-// causing a 1-day shift for timezones ahead of UTC (e.g. IST=UTC+5:30).
 const formatDateField = (dateVal) => {
   if (!dateVal) return null;
   if (typeof dateVal === "string") return dateVal.split("T")[0];
@@ -27,7 +27,7 @@ const formatProjectDates = (project) => {
   };
 };
 
-const createProject = (req, res) => {
+const createProject = async (req, res) => {
   try {
     const {
       project_name,
@@ -45,19 +45,19 @@ const createProject = (req, res) => {
 
     const error = validateRequest(req.body, {
       project_name: { required: true, minLength: 2 },
-      project_category: { required: true, enum: ['Tech', 'Social Media', 'Both'] },
-      project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
-      project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
-      project_budget: { required: true, type: 'number' },
+      project_category: { required: true, enum: ["Tech", "Social Media", "Both"] },
+      project_status: { required: true, enum: ["Hold", "In Progress", "Completed"] },
+      project_priority: { required: true, enum: ["High", "Medium", "Low"] },
+      project_budget: { required: true, type: "number" },
       onboarding_date: { required: true },
       deadline_date: { required: true },
-      client_id: { required: true }
+      client_id: { required: true },
     });
 
     if (error) {
       return res.status(400).json({ message: error.message });
     }
-    
+
     // Validate date objects
     const oDate = new Date(onboarding_date);
     const dDate = new Date(deadline_date);
@@ -77,235 +77,187 @@ const createProject = (req, res) => {
     const uuid = uuidv4();
     const query =
       "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
-    db.query(
-      query,
-      [
-        uuid,
-        project_name,
-        project_description,
-        project_category,
-        project_status,
-        project_priority,
-        parseInt(project_budget) || 0,
-        onboarding_date,
-        deadline_date,
-        scope_document,
-        client_id,
-        admin_id,
-      ],
-      (err, result) => {
-        if (err) {
-          console.log(err);
-          return res.status(500).json({ message: "Failed to create project" });
-        }
 
-        const projectId = result.insertId;
-        db.query(
-          "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
-          [projectId],
-          (err, projects) => {
-            if (err) {
-              return res
-                .status(201)
-                .json({ message: "Project created successfully", uuid });
-            }
-            res
-              .status(201)
-              .json({
-                message: "Project created successfully",
-                project: formatProjectDates(projects[0]),
-              });
-          },
-        );
-      },
-    );
+    const [result] = await pool.query(query, [
+      uuid,
+      project_name,
+      project_description,
+      project_category,
+      project_status,
+      project_priority,
+      parseInt(project_budget) || 0,
+      onboarding_date,
+      deadline_date,
+      scope_document,
+      client_id,
+      admin_id,
+    ]);
+
+    const projectId = result.insertId;
+    const [projects] = await pool.query("SELECT * FROM crm_tbl_projects WHERE project_id = ?", [
+      projectId,
+    ]);
+
+    res.status(201).json({
+      message: "Project created successfully",
+      project: formatProjectDates(projects[0]),
+    });
   } catch (err) {
     console.error("Unhandled error in createProject:", err);
     res.status(500).json({ message: "An unexpected error occurred while creating project." });
   }
 };
 
-const updateProject = (req, res) => {
-  const { id } = req.params;
-  const {
-    project_name,
-    project_description,
-    project_category,
-    project_status,
-    project_priority,
-    project_budget,
-    onboarding_date,
-    deadline_date,
-  } = req.body;
+const updateProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      project_name,
+      project_description,
+      project_category,
+      project_status,
+      project_priority,
+      project_budget,
+      onboarding_date,
+      deadline_date,
+    } = req.body;
 
-  const error = validateRequest(req.body, {
-    project_name: { required: true, minLength: 2 },
-    project_category: { required: true },
-    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] },
-    project_priority: { required: true, enum: ['High', 'Medium', 'Low'] },
-    project_budget: { required: true, type: 'number' },
-    onboarding_date: { required: true },
-    deadline_date: { required: true }
-  });
+    const error = validateRequest(req.body, {
+      project_name: { required: true, minLength: 2 },
+      project_category: { required: true },
+      project_status: { required: true, enum: ["Hold", "In Progress", "Completed"] },
+      project_priority: { required: true, enum: ["High", "Medium", "Low"] },
+      project_budget: { required: true, type: "number" },
+      onboarding_date: { required: true },
+      deadline_date: { required: true },
+    });
 
-  if (error) {
-    return res.status(400).json({ message: error.message });
-  }
-  
-  if (onboarding_date && deadline_date && new Date(deadline_date) < new Date(onboarding_date)) {
-    return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
-  }
-
-  const admin_id = req.user?.admin_id || null;
-  const scope_document = req.file ? req.file.filename : req.body.scope_document;
-
-  let query = `UPDATE crm_tbl_projects SET 
-    project_name = ?, 
-    project_description = ?, 
-    project_category = ?, 
-    project_status = ?, 
-    project_priority = ?, 
-    project_budget = ?, 
-    onboarding_date = ?, 
-    deadline_date = ?,
-    updated_by = ?`;
-
-  const queryParams = [
-    project_name,
-    project_description,
-    project_category,
-    project_status,
-    project_priority,
-    project_budget,
-    onboarding_date,
-    deadline_date,
-    admin_id,
-  ];
-
-  if (scope_document) {
-    query += `, scope_document = ?`;
-    queryParams.push(scope_document);
-  }
-
-  query += ` WHERE project_id = ?`;
-  queryParams.push(id);
-
-  db.query(query, queryParams, (err, result) => {
-    if (err) {
-      console.error("Database error updating project:", err.message);
-      return res.status(500).json({ message: "Failed to update project" });
+    if (error) {
+      return res.status(400).json({ message: error.message });
     }
+
+    if (onboarding_date && deadline_date && new Date(deadline_date) < new Date(onboarding_date)) {
+      return res.status(400).json({ message: "Deadline cannot be before onboarding date." });
+    }
+
+    const admin_id = req.user?.admin_id || null;
+    const scope_document = req.file ? req.file.filename : req.body.scope_document;
+
+    let query = `UPDATE crm_tbl_projects SET 
+      project_name = ?, 
+      project_description = ?, 
+      project_category = ?, 
+      project_status = ?, 
+      project_priority = ?, 
+      project_budget = ?, 
+      onboarding_date = ?, 
+      deadline_date = ?,
+      updated_by = ?`;
+
+    const queryParams = [
+      project_name,
+      project_description,
+      project_category,
+      project_status,
+      project_priority,
+      project_budget,
+      onboarding_date,
+      deadline_date,
+      admin_id,
+    ];
+
+    if (scope_document) {
+      query += `, scope_document = ?`;
+      queryParams.push(scope_document);
+    }
+
+    query += ` WHERE project_id = ?`;
+    queryParams.push(id);
+
+    const [result] = await pool.query(query, queryParams);
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
     }
 
     // Fetch and return the updated project
-    db.query(
-      "SELECT * FROM crm_tbl_projects WHERE project_id = ?",
-      [id],
-      (err, projects) => {
-        if (err) {
-          return res
-            .status(200)
-            .json({ message: "Project Updated Successfully!" });
-        }
-        res.status(200).json({
-          message: "Project Updated Successfully!",
-          project: formatProjectDates(projects[0]),
-        });
-      },
-    );
-  });
-};
+    const [projects] = await pool.query("SELECT * FROM crm_tbl_projects WHERE project_id = ?", [id]);
 
-const getProjects = (req, res) => {
-  const query = "SELECT *, project_id AS id FROM crm_tbl_projects";
-  db.query(query, (err, result) => {
-    if (err) {
-      console.error("Error fetching projects:", err.message);
-      return res.status(500).json({ message: "Failed to fetch projects" });
-    }
-    res.status(200).json(result.map(formatProjectDates));
-  });
-};
-
-const updateProjectStatus = (req, res) => {
-  const { id } = req.params;
-  const { project_status } = req.body;
-
-  const error = validateRequest(req.body, {
-    project_status: { required: true, enum: ['Hold', 'In Progress', 'Completed'] }
-  });
-
-  if (error) {
-    return res.status(400).json({ message: error.message });
+    res.status(200).json({
+      message: "Project Updated Successfully!",
+      project: formatProjectDates(projects[0]),
+    });
+  } catch (err) {
+    console.error("Database error updating project:", err.message);
+    res.status(500).json({ message: "Failed to update project" });
   }
+};
 
-  const admin_id = req.user?.admin_id || null;
-  const query =
-    "UPDATE crm_tbl_projects SET project_status = ?, updated_by = ? WHERE project_id = ?";
-  db.query(query, [project_status, admin_id, id], (err, result) => {
-    if (err) {
-      console.error("Database error updating project status:", err.message);
-      return res
-        .status(500)
-        .json({ message: "Failed to update project status" });
+const getProjects = async (req, res) => {
+  try {
+    const query = "SELECT *, project_id AS id FROM crm_tbl_projects";
+    const [result] = await pool.query(query);
+    res.status(200).json(result.map(formatProjectDates));
+  } catch (err) {
+    console.error("Error fetching projects:", err.message);
+    res.status(500).json({ message: "Failed to fetch projects" });
+  }
+};
+
+const updateProjectStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { project_status } = req.body;
+
+    const error = validateRequest(req.body, {
+      project_status: { required: true, enum: ["Hold", "In Progress", "Completed"] },
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
     }
+
+    const admin_id = req.user?.admin_id || null;
+    const query = "UPDATE crm_tbl_projects SET project_status = ?, updated_by = ? WHERE project_id = ?";
+    const [result] = await pool.query(query, [project_status, admin_id, id]);
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
     }
     res.status(200).json({ message: "Project Status Updated Successfully!" });
-  });
+  } catch (err) {
+    console.error("Database error updating project status:", err.message);
+    res.status(500).json({ message: "Failed to update project status" });
+  }
 };
 
-const deleteProject = (req, res) => {
-  const { id } = req.params;
+const deleteProject = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  // 1. Delete associated follow-up summaries
-  const deleteSummariesQuery =
-    "DELETE FROM crm_tbl_followUpSummary WHERE project_id = ?";
-  db.query(deleteSummariesQuery, [id], (summaryErr) => {
-    if (summaryErr) {
-      console.error(
-        "Error deleting related follow-up summaries:",
-        summaryErr.message,
-      );
-      // We continue to try deleting follow-ups even if summaries fail
+    // 1. Delete associated follow-ups (Foreign key in crm_tbl_followups)
+    // No need to delete summaries by project_id as that column was dropped
+    try {
+      await pool.query("DELETE FROM crm_tbl_followups WHERE project_id = ?", [id]);
+    } catch (followupErr) {
+      console.error("Error deleting related follow-ups in deleteProject:", followupErr.message);
     }
 
-    // 2. Delete associated follow-ups
-    const deleteFollowupsQuery =
-      "DELETE FROM crm_tbl_followups WHERE project_id = ?";
-    db.query(deleteFollowupsQuery, [id], (followupErr) => {
-      if (followupErr) {
-        console.error(
-          "Error deleting related follow-ups:",
-          followupErr.message,
-        );
-        return res
-          .status(500)
-          .json({ message: "Failed to delete related follow-ups" });
-      }
+    // 2. Finally delete the project itself
+    const deleteProjectQuery = "DELETE FROM crm_tbl_projects WHERE project_id = ?";
+    const [result] = await pool.query(deleteProjectQuery, [id]);
 
-      // 3. Finally delete the project itself
-      const deleteProjectQuery =
-        "DELETE FROM crm_tbl_projects WHERE project_id = ?";
-      db.query(deleteProjectQuery, [id], (err, result) => {
-        if (err) {
-          console.error("Database error deleting project:", err.message);
-          return res.status(500).json({ message: "Failed to delete project" });
-        }
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Project Not Found!" });
-        }
-        res
-          .status(200)
-          .json({
-            message: "Project and all related data deleted successfully!",
-          });
-      });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Project Not Found!" });
+    }
+
+    res.status(200).json({
+      message: "Project and related data deleted successfully!",
     });
-  });
+  } catch (err) {
+    console.error("Database error deleting project:", err.message);
+    res.status(500).json({ message: "Failed to delete project" });
+  }
 };
 
 module.exports = {
