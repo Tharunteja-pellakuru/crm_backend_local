@@ -109,9 +109,40 @@ const createNewFollowup = async (req, res) => {
       }
     }
 
+    // Fetch the fully enriched followup record to return consistent data
+    const queryEnriched = `
+      SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
+             p.project_name as projectName, p.client_id as mappedClientId,
+             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
+      FROM crm_tbl_followups f
+      LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
+      LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
+      WHERE f.followup_id = ?
+    `;
+    const [enrichedResults] = await pool.query(queryEnriched, [followupId]);
+    const f = enrichedResults[0];
+
+    const transformedFollowup = {
+      id: f.followup_id,
+      uuid: f.uuid,
+      leadId: f.originalLeadId || f.lead_id,
+      clientId: f.mappedClientId || f.lead_id,
+      projectId: f.project_id,
+      projectName: f.projectName,
+      title: f.followup_title,
+      description: f.followup_description,
+      dueDate: f.followup_datetime,
+      followup_mode: f.followup_mode,
+      status: f.followup_status.toLowerCase(),
+      priority: f.followup_priority,
+      follow_brief: f.follow_brief,
+      completed_at: f.completed_at,
+      completed_by: f.completed_by,
+    };
+
     res.status(201).json({
       message: "Followup created successfully",
-      followup: { id: followupId, uuid, ...req.body },
+      followup: transformedFollowup,
     });
   } catch (err) {
     console.error("Error in createNewFollowup:", err.message);
