@@ -1,4 +1,5 @@
 const db = require("../config/db.js");
+const pool = db.promise;
 const ExcelJS = require("exceljs");
 
 // Helper function to create Excel workbook with data
@@ -107,23 +108,27 @@ const formatDateTime = (dateString) => {
 const exportEnquiries = async (req, res) => {
   const query = `
     SELECT
-      enquiry_id,
-      uuid,
-      full_name,
-      email,
-      phone_number,
-      website_url,
-      message,
-      status,
-      remarks,
-      created_at,
-      updated_at
-    FROM crm_tbl_enquiries
-    ORDER BY created_at DESC
+      e.enquiry_id,
+      e.uuid,
+      e.full_name,
+      e.email,
+      e.phone_number,
+      e.website_url,
+      e.message,
+      e.status,
+      e.remarks,
+      e.created_at,
+      e.updated_at,
+      a1.full_name AS created_by_name,
+      a2.full_name AS updated_by_name
+    FROM crm_tbl_enquiries e
+    LEFT JOIN crm_tbl_admins a1 ON e.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a2 ON e.updated_by = a2.admin_id
+    ORDER BY e.created_at DESC
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
@@ -140,7 +145,10 @@ const exportEnquiries = async (req, res) => {
       Message: row.message || "-",
       Status: row.status || "New",
       Remarks: row.remarks || "-",
-      "Created Date": formatDate(row.created_at),
+      "Created Date": formatDateTime(row.created_at),
+      "Updated Date": formatDateTime(row.updated_at),
+      "Created By": row.created_by_name || "System",
+      "Updated By": row.updated_by_name || "-",
     }));
 
     const headers = [
@@ -154,6 +162,9 @@ const exportEnquiries = async (req, res) => {
       "Status",
       "Remarks",
       "Created Date",
+      "Updated Date",
+      "Created By",
+      "Updated By",
     ];
 
     const workbook = await createExcelWorkbook(
@@ -193,18 +204,22 @@ const exportLeads = async (req, res) => {
       l.lead_category,
       l.website_url,
       l.message,
+      l.country_code,
       e.enquiry_id,
       e.status AS enquiry_status,
       l.created_at,
-      l.updated_at
+      l.updated_at,
+      a1.full_name AS created_by_name,
+      a2.full_name AS updated_by_name
     FROM crm_tbl_leads l
-    LEFT JOIN crm_tbl_enquiries e
-      ON l.enquiry_id = e.enquiry_id
+    LEFT JOIN crm_tbl_enquiries e ON l.enquiry_id = e.enquiry_id
+    LEFT JOIN crm_tbl_admins a1 ON l.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a2 ON l.updated_by = a2.admin_id
     ORDER BY l.created_at DESC
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
@@ -216,13 +231,18 @@ const exportLeads = async (req, res) => {
       "Lead ID": row.lead_id,
       Name: row.full_name || "-",
       Phone: row.phone_number || "-",
+      "Country Code": row.country_code || "-",
       Email: row.email || "-",
       "Lead Status": row.lead_status || "-",
+      Category: row.lead_category === 1 ? "Tech" : row.lead_category === 2 ? "Social Media" : "Both",
       "Lead Source": row.enquiry_id ? "Enquiry" : "Manual",
       "Enquiry Status": row.enquiry_status || "-",
       Website: row.website_url || "-",
       Message: row.message || "-",
-      "Created Date": formatDate(row.created_at),
+      "Created Date": formatDateTime(row.created_at),
+      "Updated Date": formatDateTime(row.updated_at),
+      "Created By": row.created_by_name || "System",
+      "Updated By": row.updated_by_name || "-",
     }));
 
     const headers = [
@@ -230,13 +250,18 @@ const exportLeads = async (req, res) => {
       "Lead ID",
       "Name",
       "Phone",
+      "Country Code",
       "Email",
       "Lead Status",
+      "Category",
       "Lead Source",
       "Enquiry Status",
       "Website",
       "Message",
       "Created Date",
+      "Updated Date",
+      "Created By",
+      "Updated By",
     ];
 
     const workbook = await createExcelWorkbook(
@@ -267,28 +292,40 @@ const exportLeads = async (req, res) => {
 const exportFollowups = async (req, res) => {
   const query = `
     SELECT
-      f.followup_id AS followup_id,
-      f.uuid,
+      f.followup_id,
       f.followup_title,
       f.followup_description,
       f.followup_datetime,
       f.followup_mode,
       f.followup_status,
       f.followup_priority,
+      f.created_at,
+      f.updated_at,
+      -- Lead details
       l.full_name AS lead_name,
       l.phone_number AS lead_phone,
+      l.email AS lead_email,
+      -- Project \u0026 Client details
       p.project_name,
-      f.created_at
+      c.organisation_name AS client_org,
+      c.client_name AS client_person,
+      -- Summary \u0026 Audit
+      s.conclusion_message,
+      s.completed_at,
+      a1.full_name AS created_by_name,
+      a2.full_name AS updated_by_name
     FROM crm_tbl_followups f
-    LEFT JOIN crm_tbl_leads l
-      ON f.lead_id = l.lead_id
-    LEFT JOIN crm_tbl_projects p
-      ON f.project_id = p.project_id
+    LEFT JOIN crm_tbl_leads l ON f.lead_id = l.lead_id
+    LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
+    LEFT JOIN crm_tbl_clients c ON p.client_id = c.client_id
+    LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
+    LEFT JOIN crm_tbl_admins a1 ON f.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a2 ON f.updated_by = a2.admin_id
     ORDER BY f.followup_datetime DESC
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
@@ -298,31 +335,57 @@ const exportFollowups = async (req, res) => {
     const transformedData = results.map((row, index) => ({
       "S.No": index + 1,
       "Follow-up ID": row.followup_id,
-      Title: row.followup_title || "-",
-      Description: row.followup_description || "-",
-      "Date & Time": formatDateTime(row.followup_datetime),
-      Mode: row.followup_mode || "-",
-      Status: row.followup_status || "Pending",
-      Priority: row.followup_priority || "Medium",
+      "Context": row.project_name ? "Project" : "Lead",
+      "Title": row.followup_title || "-",
+      "Description": row.followup_description || "-",
+      
+      // Respective Details
       "Lead Name": row.lead_name || "-",
       "Lead Phone": row.lead_phone || "-",
+      "Lead Email": row.lead_email || "-",
       "Project Name": row.project_name || "-",
-      "Created Date": formatDate(row.created_at),
+      "Client Organization": row.client_org || "-",
+      "Contact Person": row.client_person || "-",
+      
+      // Status \u0026 Priority
+      "Scheduled Date \u0026 Time": formatDateTime(row.followup_datetime),
+      "Mode": row.followup_mode || "-",
+      "Status": row.followup_status || "Pending",
+      "Priority": row.followup_priority || "Medium",
+      
+      // Result
+      "Conclusion": row.conclusion_message || "-",
+      "Completed At": formatDateTime(row.completed_at),
+      
+      // Audit
+      "Created Date": formatDateTime(row.created_at),
+      "Updated Date": formatDateTime(row.updated_at),
+      "Created By": row.created_by_name || "System",
+      "Updated By": row.updated_by_name || "-",
     }));
 
     const headers = [
       "S.No",
       "Follow-up ID",
+      "Context",
       "Title",
       "Description",
-      "Date & Time",
+      "Lead Name",
+      "Lead Phone",
+      "Lead Email",
+      "Project Name",
+      "Client Organization",
+      "Contact Person",
+      "Scheduled Date \u0026 Time",
       "Mode",
       "Status",
       "Priority",
-      "Lead Name",
-      "Lead Phone",
-      "Project Name",
+      "Conclusion",
+      "Completed At",
       "Created Date",
+      "Updated Date",
+      "Created By",
+      "Updated By",
     ];
 
     const workbook = await createExcelWorkbook(
@@ -362,15 +425,19 @@ const exportClients = async (req, res) => {
       c.client_currency,
       c.client_status,
       l.full_name AS lead_name,
-      c.created_at
+      c.created_at,
+      c.updated_at,
+      a1.full_name AS created_by_name,
+      a2.full_name AS updated_by_name
     FROM crm_tbl_clients c
-    LEFT JOIN crm_tbl_leads l
-      ON c.lead_id = l.lead_id
+    LEFT JOIN crm_tbl_leads l ON c.lead_id = l.lead_id
+    LEFT JOIN crm_tbl_admins a1 ON c.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a2 ON c.updated_by = a2.admin_id
     ORDER BY c.created_at DESC
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
@@ -387,7 +454,10 @@ const exportClients = async (req, res) => {
       Currency: row.client_currency || "-",
       Status: row.client_status || "Active",
       "Converted From Lead": row.lead_name || "-",
-      "Created Date": formatDate(row.created_at),
+      "Created Date": formatDateTime(row.created_at),
+      "Updated Date": formatDateTime(row.updated_at),
+      "Created By": row.created_by_name || "System",
+      "Updated By": row.updated_by_name || "-",
     }));
 
     const headers = [
@@ -401,6 +471,9 @@ const exportClients = async (req, res) => {
       "Status",
       "Converted From Lead",
       "Created Date",
+      "Updated Date",
+      "Created By",
+      "Updated By",
     ];
 
     const workbook = await createExcelWorkbook(
@@ -441,16 +514,21 @@ const exportProjects = async (req, res) => {
       p.project_budget,
       p.onboarding_date,
       p.deadline_date,
+      p.scope_document,
       c.organisation_name AS client_name,
-      p.created_at
+      p.created_at,
+      p.updated_at,
+      a1.full_name AS created_by_name,
+      a2.full_name AS updated_by_name
     FROM crm_tbl_projects p
-    LEFT JOIN crm_tbl_clients c
-      ON p.client_id = c.client_id
+    LEFT JOIN crm_tbl_clients c ON p.client_id = c.client_id
+    LEFT JOIN crm_tbl_admins a1 ON p.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a2 ON p.updated_by = a2.admin_id
     ORDER BY p.created_at DESC
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
@@ -471,7 +549,11 @@ const exportProjects = async (req, res) => {
       "Client Name": row.client_name || "-",
       "Onboarding Date": formatDate(row.onboarding_date),
       Deadline: formatDate(row.deadline_date),
-      "Created Date": formatDate(row.created_at),
+      "Scope Document": row.scope_document ? row.scope_document.split('/').pop() : "-",
+      "Created Date": formatDateTime(row.created_at),
+      "Updated Date": formatDateTime(row.updated_at),
+      "Created By": row.created_by_name || "System",
+      "Updated By": row.updated_by_name || "-",
     }));
 
     const headers = [
@@ -486,7 +568,11 @@ const exportProjects = async (req, res) => {
       "Client Name",
       "Onboarding Date",
       "Deadline",
+      "Scope Document",
       "Created Date",
+      "Updated Date",
+      "Created By",
+      "Updated By",
     ];
 
     const workbook = await createExcelWorkbook(
@@ -534,7 +620,7 @@ const exportAllCRMData = async (req, res) => {
   `;
 
   try {
-    const [results] = await db.promise().query(query);
+    const [results] = await pool.query(query);
 
     if (results.length === 0) {
       return res.status(404).json({ message: "Empty records" });
