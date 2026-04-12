@@ -148,7 +148,17 @@ const updateLead = async (req, res) => {
 
 const getLeads = async (req, res) => {
   try {
-    const query = `SELECT *, lead_id AS id FROM crm_tbl_leads`;
+    const query = `
+      SELECT 
+        l.*, 
+        l.lead_id AS id,
+        c.organisation_name AS client_organisation,
+        c.client_state AS client_state,
+        c.client_country AS client_country,
+        c.client_currency AS client_currency
+      FROM crm_tbl_leads l
+      LEFT JOIN crm_tbl_clients c ON l.lead_id = c.lead_id
+    `;
     const [result] = await pool.query(query);
     res.status(200).json({ message: "Leads Fetched Successfully!.", leads: result });
   } catch (err) {
