@@ -130,6 +130,25 @@ const updateLead = async (req, res) => {
       actualLeadId,
     ]);
 
+    // Sync category to project table: lead -> client -> project(s)
+    try {
+      const [clientRows] = await pool.query(
+        "SELECT client_id FROM crm_tbl_clients WHERE lead_id = ?", [actualLeadId]
+      );
+      if (clientRows.length > 0 && clientRows[0].client_id) {
+        const projectCategory = lead_category;
+        console.log(`Syncing category ${projectCategory} to all projects for client ${clientRows[0].client_id} from lead ${actualLeadId}`);
+        await pool.query(
+          "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ?",
+          [projectCategory, clientRows[0].client_id]
+        );
+      } else {
+        console.warn(`No client found for lead ${actualLeadId} during lead sync.`);
+      }
+    } catch (syncErr) {
+      console.error("Warning: Failed to sync category to project table:", syncErr.message);
+    }
+
     // 3. Fetch the fully updated lead to return it (aliased for frontend)
     const [updatedLeads] = await pool.query(
       "SELECT *, lead_id AS id FROM crm_tbl_leads WHERE lead_id = ?",

@@ -45,9 +45,9 @@ const createProject = async (req, res) => {
 
     const error = validateRequest(req.body, {
       project_name: { required: true, minLength: 2 },
-      project_category: { required: true, enum: ["Tech", "Social Media", "Both"] },
-      project_status: { required: true, enum: ["Hold", "In Progress", "Completed"] },
-      project_priority: { required: true, enum: ["High", "Medium", "Low"] },
+      project_category: { required: true },
+      project_status: { required: true, enum: ["Hold", "In Progress", "Completed", "Planning"] },
+      project_priority: { required: true },
       project_budget: { required: true, type: "number" },
       onboarding_date: { required: true },
       deadline_date: { required: true },
@@ -125,14 +125,15 @@ const updateProject = async (req, res) => {
     const error = validateRequest(req.body, {
       project_name: { required: true, minLength: 2 },
       project_category: { required: true },
-      project_status: { required: true, enum: ["Hold", "In Progress", "Completed"] },
-      project_priority: { required: true, enum: ["High", "Medium", "Low"] },
+      project_status: { required: true, enum: ["Hold", "In Progress", "Completed", "Planning"] },
+      project_priority: { required: true },
       project_budget: { required: true, type: "number" },
       onboarding_date: { required: true },
       deadline_date: { required: true },
     });
 
     if (error) {
+      console.error("Validation error in updateProject:", error.message, req.body);
       return res.status(400).json({ message: error.message });
     }
 
@@ -178,6 +179,32 @@ const updateProject = async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
+    }
+
+    // Sync category to lead table: project -> client -> lead
+    try {
+      const [projectRows] = await pool.query(
+        "SELECT client_id FROM crm_tbl_projects WHERE project_id = ?", [id]
+      );
+      if (projectRows.length > 0 && projectRows[0].client_id) {
+        const [clientRows] = await pool.query(
+          "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?", [projectRows[0].client_id]
+        );
+        if (clientRows.length > 0 && clientRows[0].lead_id) {
+          const leadCategory = project_category;
+          console.log(`Syncing category ${leadCategory} to lead ${clientRows[0].lead_id} from project ${id}`);
+          await pool.query(
+            "UPDATE crm_tbl_leads SET lead_category = ? WHERE lead_id = ?",
+            [leadCategory, clientRows[0].lead_id]
+          );
+        } else {
+          console.warn(`No lead_id found for client ${projectRows[0].client_id} during project sync.`);
+        }
+      } else {
+        console.warn(`No client_id found for project ${id} during sync.`);
+      }
+    } catch (syncErr) {
+      console.error("Warning: Failed to sync category to lead table:", syncErr.message);
     }
 
     // Fetch and return the updated project

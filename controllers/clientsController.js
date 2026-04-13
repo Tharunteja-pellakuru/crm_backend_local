@@ -212,7 +212,7 @@ const convertLead = async (req, res) => {
         projectUuid,
         project_name,
         project_description || "",
-        project_category || "Tech",
+        project_category || 1,
         project_status || "In Progress",
         project_priority || "Medium",
         parseInt(project_budget) || 0,
