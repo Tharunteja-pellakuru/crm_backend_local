@@ -129,12 +129,11 @@ const createLeadsTable = async () => {
     });
 
     if (!columns) {
-      // Table doesn't exist - drop FK constraints from dependent tables first,
-      // then drop any orphaned InnoDB metadata, and finally create fresh.
-      // This prevents errno 150 when existing tables still reference the old crm_tbl_leads.
-      await runQueryOn(conn, "ALTER TABLE crm_tbl_followups DROP FOREIGN KEY IF EXISTS crm_tbl_followups_ibfk_1");
-      await runQueryOn(conn, "ALTER TABLE crm_tbl_clients DROP FOREIGN KEY IF EXISTS fk_client_lead");
-      await runQueryOn(conn, "DROP TABLE IF EXISTS crm_tbl_leads");
+      // Table doesn't exist - attempt to create fresh.
+      // [LOCKDOWN] Dropping table is disabled to prevent accidental data loss.
+      // await runQueryOn(conn, "ALTER TABLE crm_tbl_followups DROP FOREIGN KEY IF EXISTS crm_tbl_followups_ibfk_1");
+      // await runQueryOn(conn, "ALTER TABLE crm_tbl_clients DROP FOREIGN KEY IF EXISTS fk_client_lead");
+      // await runQueryOn(conn, "DROP TABLE IF EXISTS crm_tbl_leads");
       await runQueryOn(conn,
         `CREATE TABLE IF NOT EXISTS crm_tbl_leads (
           lead_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -142,7 +141,7 @@ const createLeadsTable = async () => {
           full_name VARCHAR(100) NOT NULL,
           phone_number VARCHAR(20),
           email VARCHAR(250),
-          lead_category INT NOT NULL,
+          lead_category VARCHAR(50) DEFAULT '1',
           lead_status VARCHAR(50),
           website_url TEXT,
           message TEXT,
@@ -537,9 +536,9 @@ const createProjectsTable = async () => {
           uuid CHAR(36) NOT NULL UNIQUE,
           project_name VARCHAR(250) NOT NULL,
           project_description TEXT,
-          project_category ENUM('Tech','Social Media','Both') DEFAULT 'Tech',
-          project_status ENUM('Hold','In Progress','Completed') DEFAULT 'In Progress',
-          project_priority ENUM('High','Medium','Low') DEFAULT 'High',
+          project_category VARCHAR(50) DEFAULT '1',
+          project_status VARCHAR(50) DEFAULT 'In Progress',
+          project_priority VARCHAR(50) DEFAULT 'High',
           project_budget INT,
           onboarding_date DATE,
           deadline_date DATE,

@@ -132,21 +132,29 @@ const updateLead = async (req, res) => {
 
     // Sync category to project table: lead -> client -> project(s)
     try {
-      const [clientRows] = await pool.query(
-        "SELECT client_id FROM crm_tbl_clients WHERE lead_id = ?", [actualLeadId]
+      const [leadRows] = await pool.query(
+        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?", [actualLeadId]
       );
-      if (clientRows.length > 0 && clientRows[0].client_id) {
-        const projectCategory = lead_category;
-        console.log(`Syncing category ${projectCategory} to all projects for client ${clientRows[0].client_id} from lead ${actualLeadId}`);
-        await pool.query(
-          "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ?",
-          [projectCategory, clientRows[0].client_id]
+      if (leadRows.length > 0) {
+        const currentCategory = leadRows[0].lead_category;
+        const [clientRows] = await pool.query(
+          "SELECT client_id FROM crm_tbl_clients WHERE lead_id = ?", [actualLeadId]
         );
-      } else {
-        console.warn(`No client found for lead ${actualLeadId} during lead sync.`);
+        if (clientRows.length > 0 && clientRows[0].client_id) {
+          const clientId = clientRows[0].client_id;
+          console.log(`[SYNC] Propagating category ${currentCategory} from Lead ${actualLeadId} to all projects for Client ${clientId}`);
+          
+          const [res] = await pool.query(
+            "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ?",
+            [currentCategory, clientId]
+          );
+          console.log(`[SYNC] Updated ${res.affectedRows} projects for Client ${clientId}`);
+        } else {
+          console.log(`[SYNC] No associated client found for Lead ${actualLeadId}. Skipping project sync.`);
+        }
       }
     } catch (syncErr) {
-      console.error("Warning: Failed to sync category to project table:", syncErr.message);
+      console.error("[SYNC ERROR] Failed to propagate category change from lead:", syncErr.message);
     }
 
     // 3. Fetch the fully updated lead to return it (aliased for frontend)
