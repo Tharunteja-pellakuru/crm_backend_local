@@ -183,25 +183,40 @@ const updateProject = async (req, res) => {
 
     // Sync category to lead table: project -> client -> lead
     try {
+      // 1. Get the current project to find its client_id
       const [projectRows] = await pool.query(
         "SELECT client_id, project_category FROM crm_tbl_projects WHERE project_id = ?", [id]
       );
+      
       if (projectRows.length > 0 && projectRows[0].client_id) {
         const clientId = projectRows[0].client_id;
         const currentCategory = projectRows[0].project_category;
         
+        // 2. Find the lead associated with this client
         const [clientRows] = await pool.query(
           "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?", [clientId]
         );
         
         if (clientRows.length > 0 && clientRows[0].lead_id) {
           const leadId = clientRows[0].lead_id;
-          console.log(`[SYNC] Propagating category ${currentCategory} from Project ${id} to Lead ${leadId} via Client ${clientId}`);
           
+          console.log(`[SYNC] Propagating category ${currentCategory} from Project ${id} to Lead ${leadId}`);
+          
+          // 3. Update the lead's category
           await pool.query(
             "UPDATE crm_tbl_leads SET lead_category = ? WHERE lead_id = ?",
             [currentCategory, leadId]
           );
+          
+          // 4. Also sync ALL OTHER projects for this same client so they remain consistent
+          const [multiSyncResult] = await pool.query(
+            "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ? AND project_id != ?",
+            [currentCategory, clientId, id]
+          );
+          
+          if (multiSyncResult.affectedRows > 0) {
+            console.log(`[SYNC] Updated ${multiSyncResult.affectedRows} other projects for client ${clientId} to match category ${currentCategory}`);
+          }
         } else {
           console.log(`[SYNC] No associated lead_id found for Client ${clientId}. Skipping lead sync.`);
         }
