@@ -204,6 +204,13 @@ const convertLead = async (req, res) => {
 
     // 2. Create Project (Optional)
     if (project_name) {
+      // Fetch lead category to ensure project starts with lead's category
+      const [leadRows] = await connection.query(
+        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?",
+        [lead_id]
+      );
+      const effectiveCategory = leadRows.length > 0 ? leadRows[0].lead_category : (project_category || 1);
+
       const projectUuid = uuidv4();
       const projectQuery =
         "INSERT INTO crm_tbl_projects (uuid, project_name, project_description, project_category, project_status, project_priority, project_budget, onboarding_date, deadline_date, scope_document, client_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -212,7 +219,7 @@ const convertLead = async (req, res) => {
         projectUuid,
         project_name,
         project_description || "",
-        project_category || 1,
+        effectiveCategory,
         project_status || "In Progress",
         project_priority || "Medium",
         parseInt(project_budget) || 0,

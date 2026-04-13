@@ -75,6 +75,23 @@ const createProject = async (req, res) => {
 
     const admin_id = req.user?.admin_id || null;
     const uuid = uuidv4();
+
+    // Fetch lead category to ensure project starts with lead's category
+    const [clientRows] = await pool.query(
+      "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?",
+      [client_id]
+    );
+    let effectiveCategory = project_category;
+    if (clientRows.length > 0 && clientRows[0].lead_id) {
+      const [leadRows] = await pool.query(
+        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?",
+        [clientRows[0].lead_id]
+      );
+      if (leadRows.length > 0) {
+        effectiveCategory = leadRows[0].lead_category;
+      }
+    }
+
     const query =
       "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
 
@@ -82,7 +99,7 @@ const createProject = async (req, res) => {
       uuid,
       project_name,
       project_description,
-      project_category,
+      effectiveCategory,
       project_status,
       project_priority,
       parseInt(project_budget) || 0,
