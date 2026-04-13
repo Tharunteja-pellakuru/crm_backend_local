@@ -274,4 +274,22 @@ const formatProjectDates = (project) => {
   };
 };
 
-module.exports = { createClient, getClients, updateClient, convertLead };
+const deleteClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const query = "DELETE FROM crm_tbl_clients WHERE client_id = ?";
+    const [result] = await pool.query(query, [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Client Not Found!" });
+    }
+
+    res.status(200).json({ message: "Client Deleted Successfully!" });
+  } catch (err) {
+    console.error("Database error deleting client:", err.message);
+    res.status(500).json({ message: "Failed to delete client" });
+  }
+};
+
+module.exports = { createClient, getClients, updateClient, convertLead, deleteClient };

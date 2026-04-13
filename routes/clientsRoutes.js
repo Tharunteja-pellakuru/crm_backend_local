@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 
-const { createClient, getClients, updateClient, convertLead } = require("../controllers/clientsController");
+const { createClient, getClients, updateClient, convertLead, deleteClient } = require("../controllers/clientsController");
 
 // Multer configuration for file uploads (PDF only)
 const storage = multer.diskStorage({
@@ -32,5 +32,6 @@ router.post("/add-client", authenticateToken, createClient);
 router.post("/convert-lead", authenticateToken, upload.single("scope_document"), convertLead);
 router.get("/get-clients", authenticateToken, getClients);
 router.put("/update-client/:id", authenticateToken, updateClient);
+router.delete("/delete-client/:id", authenticateToken, deleteClient);
 
 module.exports = router;
