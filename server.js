@@ -20,7 +20,14 @@ const exportRoutes = require("./routes/exportRoutes");
 const app = express();
 
 // Middlewares
-app.use(cors());
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 /* Serve uploaded images with absolute path */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
