@@ -4,6 +4,21 @@ const { validateRequest } = require("../middleware/validation");
 
 const pool = db.promise;
 
+// Extract only the numeric dial code with + prefix (e.g. "+91" from "India (+91)" or "91")
+function sanitizeCountryCode(raw) {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  // If it already looks like +XX or +XXX (pure dial code), use it
+  if (/^\+\d{1,4}$/.test(str)) return str;
+  // Try to extract from formats like "+91 9988..." or "India (+91)"
+  const match = str.match(/(\+\d{1,4})/);
+  if (match) return match[1];
+  // If it's just digits, prefix with +
+  if (/^\d{1,4}$/.test(str)) return `+${str}`;
+  // Return null if we can't parse it, to avoid DB error
+  return null;
+}
+
 const createLead = async (req, res) => {
   try {
     const uuid = uuidv4();
@@ -47,6 +62,7 @@ const createLead = async (req, res) => {
       enquiry_id,
       created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
 
+    const sanitizedCode = sanitizeCountryCode(country_code);
     const [result] = await pool.query(query, [
       uuid,
       full_name,
@@ -56,7 +72,7 @@ const createLead = async (req, res) => {
       website_url,
       email,
       message,
-      country_code,
+      sanitizedCode,
       enquiry_id,
       req.user.admin_id,
     ]);
@@ -103,7 +119,7 @@ const updateLead = async (req, res) => {
     const message = updateData.message || updateData.notes || updateData.projectDescription || currentLead.message;
     const lead_category = updateData.lead_category || updateData.projectCategory || currentLead.lead_category;
     const website_url = updateData.website_url || updateData.website || currentLead.website_url;
-    const country_code = updateData.country_code || updateData.countryCode || currentLead.country_code;
+    const country_code = sanitizeCountryCode(updateData.country_code || updateData.countryCode || currentLead.country_code);
 
     const updateQuery = `UPDATE crm_tbl_leads SET 
       full_name = ?, 

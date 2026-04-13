@@ -145,7 +145,7 @@ const createLeadsTable = async () => {
           lead_status VARCHAR(50),
           website_url TEXT,
           message TEXT,
-          country_code VARCHAR(10),
+          country_code VARCHAR(20),
           enquiry_id INT DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
