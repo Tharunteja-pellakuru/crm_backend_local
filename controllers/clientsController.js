@@ -280,11 +280,26 @@ const deleteClient = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // First, get the lead_id associated with this client
+    const [clientRows] = await pool.query(
+      "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?",
+      [id]
+    );
+
+    const leadId = clientRows.length > 0 ? clientRows[0].lead_id : null;
+
+    // Delete the client
     const query = "DELETE FROM crm_tbl_clients WHERE client_id = ?";
     const [result] = await pool.query(query, [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Client Not Found!" });
+    }
+
+    // If there was an associated lead, update its status back to "Hot"
+    if (leadId) {
+      const updateLeadQuery = "UPDATE crm_tbl_leads SET lead_status = 'Hot' WHERE lead_id = ?";
+      await pool.query(updateLeadQuery, [leadId]);
     }
 
     res.status(200).json({ message: "Client Deleted Successfully!" });
