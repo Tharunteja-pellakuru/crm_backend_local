@@ -89,8 +89,8 @@ const createNewFollowup = async (req, res) => {
     if (formattedStatus === "Completed") {
       const summaryUuid = uuidv4();
       const querySummary = `
-              INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
-              VALUES (?, ?, ?, ?, ?, ?)
+              INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
             `;
 
       const formattedCompletedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -102,6 +102,7 @@ const createNewFollowup = async (req, res) => {
           follow_brief || "",
           formattedCompletedAt,
           completed_by || "System",
+          req.user.admin_id,
           req.user.admin_id,
         ]);
       } catch (summaryErr) {
@@ -248,8 +249,8 @@ const updateFollowup = async (req, res) => {
         : new Date().toISOString().slice(0, 19).replace("T", " ");
 
       const querySummary = `
-        INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
 
       await pool.query(querySummary, [
@@ -258,6 +259,7 @@ const updateFollowup = async (req, res) => {
         follow_brief,
         formattedCompletedAt,
         completed_by || "System",
+        req.user.admin_id,
         req.user.admin_id,
       ]);
     } else {
@@ -318,8 +320,8 @@ const toggleFollowupStatus = async (req, res) => {
 
       const summaryUuid = uuidv4();
       const querySummary = `
-          INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO crm_tbl_followUpSummary (uuid, followup_id, conclusion_message, completed_at, completed_by, created_by, updated_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
 
       const finalCompletedAt = completed_at
@@ -332,6 +334,7 @@ const toggleFollowupStatus = async (req, res) => {
         brief || "",
         finalCompletedAt,
         completed_by || "System",
+        req.user.admin_id,
         req.user.admin_id,
       ]);
     } else {
