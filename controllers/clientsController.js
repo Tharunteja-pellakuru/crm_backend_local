@@ -87,7 +87,7 @@ const updateClient = async (req, res) => {
       organisation_name: { required: true },
       client_name: { required: true },
       client_country: { required: true },
-      client_state: { required: true },
+      client_state: { required: false },
       client_currency: { required: true },
       client_status: { required: true, enum: ["Active", "Inactive"] },
     });
@@ -110,7 +110,7 @@ const updateClient = async (req, res) => {
       organisation_name,
       client_name,
       client_country,
-      client_state,
+      client_state || "",
       client_currency,
       client_status,
       req.user.admin_id,
