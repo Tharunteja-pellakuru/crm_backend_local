@@ -137,7 +137,6 @@ const getClients = async (req, res) => {
         l.email, 
         l.phone_number AS phone,
         l.country_code AS country_code,
-        l.lead_category AS projectCategory,
         l.website_url AS website,
         l.message AS brief_message
       FROM crm_tbl_clients c
@@ -204,12 +203,8 @@ const convertLead = async (req, res) => {
 
     // 2. Create Project (Optional)
     if (project_name) {
-      // Fetch lead category to ensure project starts with lead's category
-      const [leadRows] = await connection.query(
-        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?",
-        [lead_id]
-      );
-      const effectiveCategory = leadRows.length > 0 ? leadRows[0].lead_category : (project_category || 1);
+      // Category is now managed at Project level only
+      const effectiveCategory = project_category || 1;
 
       const projectUuid = uuidv4();
       const projectQuery =

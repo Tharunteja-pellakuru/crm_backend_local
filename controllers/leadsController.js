@@ -26,7 +26,6 @@ const createLead = async (req, res) => {
     const {
       full_name,
       phone_number,
-      lead_category,
       lead_status,
       website_url,
       email,
@@ -35,12 +34,11 @@ const createLead = async (req, res) => {
       enquiry_id,
     } = req.body;
 
-    console.log(full_name, phone_number, lead_category, lead_status, website_url, email, message, country_code, enquiry_id);
+    console.log(full_name, phone_number, lead_status, website_url, email, message, country_code, enquiry_id);
 
     // Validation
     const error = validateRequest(req.body, {
-      full_name: { required: true, minLength: 2 },
-      lead_category: { required: true }
+      full_name: { required: true, minLength: 2 }
     });
 
     if (error) {
@@ -53,21 +51,19 @@ const createLead = async (req, res) => {
 
     const query = `INSERT INTO crm_tbl_leads (uuid, full_name,
       phone_number,
-      lead_category,
       lead_status,
       website_url,
       email,     
       message,
       country_code,
       enquiry_id,
-      created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+      created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`;
 
     const sanitizedCode = sanitizeCountryCode(country_code);
     const [result] = await pool.query(query, [
       uuid,
       full_name,
       phone_number,
-      lead_category,
       lead_status,
       website_url,
       email,
@@ -117,7 +113,6 @@ const updateLead = async (req, res) => {
     const email = updateData.email || currentLead.email;
     const lead_status = updateData.lead_status || updateData.leadType || currentLead.lead_status;
     const message = updateData.message || updateData.notes || updateData.projectDescription || currentLead.message;
-    const lead_category = updateData.lead_category || updateData.projectCategory || currentLead.lead_category;
     const website_url = updateData.website_url || updateData.website || currentLead.website_url;
     const country_code = sanitizeCountryCode(updateData.country_code || updateData.countryCode || currentLead.country_code);
 
@@ -127,7 +122,6 @@ const updateLead = async (req, res) => {
       email = ?, 
       lead_status = ?, 
       message = ?, 
-      lead_category = ?, 
       website_url = ?,
       country_code = ?,
       updated_by = ?
@@ -139,39 +133,11 @@ const updateLead = async (req, res) => {
       email,
       lead_status,
       message,
-      lead_category,
       website_url,
       country_code,
       req.user.admin_id,
       actualLeadId,
     ]);
-
-    // Sync category to project table: lead -> client -> project(s)
-    try {
-      const [leadRows] = await pool.query(
-        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?", [actualLeadId]
-      );
-      if (leadRows.length > 0) {
-        const currentCategory = leadRows[0].lead_category;
-        const [clientRows] = await pool.query(
-          "SELECT client_id FROM crm_tbl_clients WHERE lead_id = ?", [actualLeadId]
-        );
-        if (clientRows.length > 0 && clientRows[0].client_id) {
-          const clientId = clientRows[0].client_id;
-          console.log(`[SYNC] Propagating category ${currentCategory} from Lead ${actualLeadId} to all projects for Client ${clientId}`);
-          
-          const [res] = await pool.query(
-            "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ?",
-            [currentCategory, clientId]
-          );
-          console.log(`[SYNC] Updated ${res.affectedRows} projects for Client ${clientId}`);
-        } else {
-          console.log(`[SYNC] No associated client found for Lead ${actualLeadId}. Skipping project sync.`);
-        }
-      }
-    } catch (syncErr) {
-      console.error("[SYNC ERROR] Failed to propagate category change from lead:", syncErr.message);
-    }
 
     // 3. Fetch the fully updated lead to return it (aliased for frontend)
     const [updatedLeads] = await pool.query(

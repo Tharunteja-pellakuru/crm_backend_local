@@ -76,21 +76,8 @@ const createProject = async (req, res) => {
     const admin_id = req.user?.admin_id || null;
     const uuid = uuidv4();
 
-    // Fetch lead category to ensure project starts with lead's category
-    const [clientRows] = await pool.query(
-      "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?",
-      [client_id]
-    );
-    let effectiveCategory = project_category;
-    if (clientRows.length > 0 && clientRows[0].lead_id) {
-      const [leadRows] = await pool.query(
-        "SELECT lead_category FROM crm_tbl_leads WHERE lead_id = ?",
-        [clientRows[0].lead_id]
-      );
-      if (leadRows.length > 0) {
-        effectiveCategory = leadRows[0].lead_category;
-      }
-    }
+    // Category is now managed at Project level only
+    const effectiveCategory = project_category;
 
     const query =
       "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -196,52 +183,6 @@ const updateProject = async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Project Not Found!" });
-    }
-
-    // Sync category to lead table: project -> client -> lead
-    try {
-      // 1. Get the current project to find its client_id
-      const [projectRows] = await pool.query(
-        "SELECT client_id, project_category FROM crm_tbl_projects WHERE project_id = ?", [id]
-      );
-      
-      if (projectRows.length > 0 && projectRows[0].client_id) {
-        const clientId = projectRows[0].client_id;
-        const currentCategory = projectRows[0].project_category;
-        
-        // 2. Find the lead associated with this client
-        const [clientRows] = await pool.query(
-          "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?", [clientId]
-        );
-        
-        if (clientRows.length > 0 && clientRows[0].lead_id) {
-          const leadId = clientRows[0].lead_id;
-          
-          console.log(`[SYNC] Propagating category ${currentCategory} from Project ${id} to Lead ${leadId}`);
-          
-          // 3. Update the lead's category
-          await pool.query(
-            "UPDATE crm_tbl_leads SET lead_category = ? WHERE lead_id = ?",
-            [currentCategory, leadId]
-          );
-          
-          // 4. Also sync ALL OTHER projects for this same client so they remain consistent
-          const [multiSyncResult] = await pool.query(
-            "UPDATE crm_tbl_projects SET project_category = ? WHERE client_id = ? AND project_id != ?",
-            [currentCategory, clientId, id]
-          );
-          
-          if (multiSyncResult.affectedRows > 0) {
-            console.log(`[SYNC] Updated ${multiSyncResult.affectedRows} other projects for client ${clientId} to match category ${currentCategory}`);
-          }
-        } else {
-          console.log(`[SYNC] No associated lead_id found for Client ${clientId}. Skipping lead sync.`);
-        }
-      } else {
-        console.warn(`[SYNC] No client_id found for Project ${id}. Skipping sync.`);
-      }
-    } catch (syncErr) {
-      console.error("[SYNC ERROR] Failed to propagate category change:", syncErr.message);
     }
 
     // Fetch and return the updated project
