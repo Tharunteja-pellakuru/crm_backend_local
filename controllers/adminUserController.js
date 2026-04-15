@@ -14,7 +14,6 @@ const getAllAdminUsers = async (req, res) => {
         full_name as name, 
         email, 
         role, 
-        privileges, 
         status,
         created_at as joinDate,
         image
@@ -67,7 +66,7 @@ const getAllAdminUsers = async (req, res) => {
 // Create Admin Users
 const createAdminUser = async (req, res) => {
   try {
-    const { full_name, email, password, role, privileges } = req.body;
+    const { full_name, email, password, role } = req.body;
 
     const image = req.file ? req.file.filename : null;
 
@@ -78,13 +77,13 @@ const createAdminUser = async (req, res) => {
 
     const query = `
       INSERT INTO crm_tbl_admins 
-      (uuid, full_name, email, password, role, privileges, image, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (uuid, full_name, email, password, role, image, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(
       query,
-      [userUUID, full_name, email, hashedPassword, role, privileges || 3, image, req.user?.admin_id || null],
+      [userUUID, full_name, email, hashedPassword, role, image, req.user?.admin_id || null],
       (err, result) => {
         if (err) {
           console.error(err);
@@ -108,7 +107,7 @@ const updateAdminUser = async (req, res) => {
   try {
     const { uuid } = req.params;
 
-    const { full_name, email, password, role, privileges, status } = req.body;
+    const { full_name, email, password, role, status } = req.body;
 
     const image = req.file ? req.file.filename : null;
 
@@ -131,7 +130,6 @@ const updateAdminUser = async (req, res) => {
         email = ?,
         password = COALESCE(?, password),
         role = ?,
-        privileges = ?,
         status = ?,
         image = COALESCE(?, image),
         updated_by = ?
@@ -145,7 +143,6 @@ const updateAdminUser = async (req, res) => {
         email,
         hashedPassword,
         role,
-        privileges || 3,
         statusValue,
         image,
         req.user?.admin_id || null,

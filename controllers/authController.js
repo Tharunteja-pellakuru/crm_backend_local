@@ -64,7 +64,6 @@ const loginAdmin = (req, res) => {
         full_name: user.full_name,
         email: user.email,
         role: user.role,
-        privileges: user.privileges,
         image: imageUrl,
         status: user.status,
       },

@@ -52,7 +52,6 @@
         password TEXT NOT NULL,
         role VARCHAR(50),
         status BOOLEAN DEFAULT TRUE,
-        privileges VARCHAR(50),
         image TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -70,7 +69,7 @@
     const defaultImage = null;
 
     const checkQuery = "SELECT COUNT(*) as count FROM crm_tbl_admins";
-    const insertQuery = `INSERT INTO crm_tbl_admins (uuid, full_name, email, password, role, status, privileges, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const insertQuery = `INSERT INTO crm_tbl_admins (uuid, full_name, email, password, role, status, image) VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
     // Check if any admins exist
     return new Promise((resolve) => {
@@ -90,7 +89,6 @@
               hashedPassword,
               "Root Admin",
               true,
-              "3",
               defaultImage,
             ],
             (err) => {
