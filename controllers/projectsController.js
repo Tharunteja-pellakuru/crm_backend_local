@@ -240,15 +240,34 @@ const deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Delete associated follow-ups (Foreign key in crm_tbl_followups)
-    // No need to delete summaries by project_id as that column was dropped
+    // 1. First, get all followup_ids associated with this project
+    const [followups] = await pool.query(
+      "SELECT followup_id FROM crm_tbl_followups WHERE project_id = ?",
+      [id]
+    );
+
+    // 2. Delete associated summaries first (before deleting followups)
+    if (followups.length > 0) {
+      const followupIds = followups.map((f) => f.followup_id);
+      const placeholders = followupIds.map(() => "?").join(",");
+      try {
+        await pool.query(
+          `DELETE FROM crm_tbl_followUpSummary WHERE followup_id IN (${placeholders})`,
+          followupIds
+        );
+      } catch (summaryErr) {
+        console.error("Error deleting related follow-up summaries in deleteProject:", summaryErr.message);
+      }
+    }
+
+    // 3. Delete associated follow-ups
     try {
       await pool.query("DELETE FROM crm_tbl_followups WHERE project_id = ?", [id]);
     } catch (followupErr) {
       console.error("Error deleting related follow-ups in deleteProject:", followupErr.message);
     }
 
-    // 2. Finally delete the project itself
+    // 4. Finally delete the project itself
     const deleteProjectQuery = "DELETE FROM crm_tbl_projects WHERE project_id = ?";
     const [result] = await pool.query(deleteProjectQuery, [id]);
 

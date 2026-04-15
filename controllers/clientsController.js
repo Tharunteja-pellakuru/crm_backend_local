@@ -52,8 +52,11 @@ const createClient = async (req, res) => {
     // Update lead status if lead_id is provided
     if (lead_id) {
       try {
-        const updateLeadQuery = "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE lead_id = ?";
-        await pool.query(updateLeadQuery, [lead_id]);
+        // First, save the current lead status as previous_lead_status
+        await pool.query(
+          "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted' WHERE lead_id = ?",
+          [lead_id]
+        );
       } catch (leadErr) {
         console.error("Error updating lead status in createClient:", leadErr.message);
       }
@@ -226,8 +229,8 @@ const convertLead = async (req, res) => {
       ]);
     }
 
-    // 3. Update Lead Status
-    const updateLeadQuery = "UPDATE crm_tbl_leads SET lead_status = 'Converted' WHERE lead_id = ?";
+    // 3. Update Lead Status (save previous status before converting)
+    const updateLeadQuery = "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted' WHERE lead_id = ?";
     await connection.query(updateLeadQuery, [lead_id]);
 
     // Commit transaction
@@ -296,9 +299,15 @@ const deleteClient = async (req, res) => {
       return res.status(404).json({ message: "Client Not Found!" });
     }
 
-    // If there was an associated lead, update its status back to "Hot"
+    // If there was an associated lead, restore its previous status
     if (leadId) {
-      const updateLeadQuery = "UPDATE crm_tbl_leads SET lead_status = 'Hot' WHERE lead_id = ?";
+      // Restore the previous status (Hot/Warm/Cold) or default to "Hot" if no previous status
+      const updateLeadQuery = `
+        UPDATE crm_tbl_leads 
+        SET lead_status = COALESCE(previous_lead_status, 'Hot'),
+            previous_lead_status = NULL 
+        WHERE lead_id = ?
+      `;
       await pool.query(updateLeadQuery, [leadId]);
     }
 
