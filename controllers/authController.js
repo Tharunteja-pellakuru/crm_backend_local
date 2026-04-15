@@ -30,6 +30,13 @@ const loginAdmin = (req, res) => {
 
     const user = result[0];
 
+    // Check if user account is active (status: 1 or true = active, 0 or false = inactive)
+    if (user.status === 0 || user.status === false || user.status === "0" || user.status === "false") {
+      return res.status(403).json({
+        message: "Your account is inactive. Please contact administrator.",
+      });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
