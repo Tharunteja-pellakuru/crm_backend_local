@@ -264,104 +264,315 @@ Message: ${e.message}
       .join("\n---\n");
 
     const prompt = `
-You are a STRICT AI enquiry classifier for EParivartan.
+You are a STRICT AI enquiry classifier for EParivartan CRM.
 
-Your task is to classify each enquiry as RELEVANT or IRRELEVANT based ONLY on business intent.
+Your task is to classify each enquiry as RELEVANT or IRRELEVANT
+based ONLY on business intent.
+
+Be conservative. When uncertain, classify as IRRELEVANT.
 
 ---
 
 EParivartan SERVICES:
 
-* Website Development
-* Web Applications (MERN)
-* Mobile Apps (Flutter)
-* E-commerce Solutions
-* SEO & Digital Marketing
-* UI/UX Design
-* Media Services (Video Editing, Graphic Design)
+WEBSITE & WEB DEVELOPMENT
+
+• HTML / CSS / JavaScript Static Websites
+• React Websites
+• WordPress Websites
+• Shopify Websites
+• Business Websites
+• Portfolio Websites
+• Landing Pages
+
+WEB APPLICATION DEVELOPMENT
+
+• MERN Stack Applications
+• CRM / ERP Systems
+• Admin Dashboards
+• Business Portals
+• Custom Web Platforms
+
+MOBILE APPLICATIONS
+
+• Android Applications
+• iOS Applications
+• Flutter Applications
+
+E-COMMERCE SOLUTIONS
+
+• Shopify Stores
+• WooCommerce Stores
+• Online Product Selling Websites
+• Payment Gateway Integration
+
+DIGITAL MARKETING & ONLINE GROWTH
+
+• Digital Marketing
+• Social Media Marketing
+• Google Ads
+• Facebook / Instagram Ads
+• SEO (Search Engine Optimization)
+• AEO (Answer Engine Optimization)
+• GEO (Generative Engine Optimization)
+
+UI / UX DESIGN
+
+• Website UI Design
+• App UI Design
+• Figma Design
+• Wireframes
+• Prototypes
+• User Experience Improvements
+
+MEDIA & CREATIVE SERVICES
+
+• Graphic Designing
+• Logo Designing
+• Branding
+• Video Editing
+• Corporate Photography
+• Social Media Creatives
+
+BACKEND & TECHNICAL SERVICES
+
+• PHP Backend Development
+• API Development
+• Database Integration
+
+SUPPORT & MAINTENANCE
+
+• AMC (Annual Maintenance Contract)
+• Website Maintenance
+• Bug Fixing
+• Performance Optimization
 
 ---
 
-CLASSIFICATION RULES:
+PRIMARY GOAL:
+
+Identify genuine potential clients who may purchase services.
+
+Ignore politeness, greetings, or long text.
+Focus ONLY on the actual business request.
+
+---
+
+CLASSIFICATION RULES
 
 RELEVANT:
 
-* Client wants a website, app, marketing, design, or media services
-* Business inquiries for digital solutions
-* Project discussions, pricing requests, service questions
+• Client requests a website, app, design, marketing, or media service
+• Client discusses project requirements
+• Client asks for quotation, pricing, or proposal
+• Client wants business digital services
+• Client wants to build software or online presence
+• Client represents a company needing services
 
 IRRELEVANT:
 
-* Job or internship applications
-* Freelancers/agencies offering services to us
-* Physical services (construction, interior, etc.)
-* Spam, greetings, or unrelated messages
-
-EDGE CASES:
-
-* If intent is unclear → mark IRRELEVANT with low leadScore (0–30)
-* If mixed intent → prioritize dominant intent
-* Empty or meaningless text → IRRELEVANT
+• Job or internship applications
+• Freelancers or agencies offering services to us
+• Vendor or partnership proposals
+• Physical services (construction, interior, real estate, etc.)
+• Spam or promotional messages
+• Greetings without a request
+• Test messages
+• Random or unrelated text
 
 ---
 
-LEAD SCORE GUIDELINES (0–100):
+EDGE CASE HANDLING
 
-* 90–100 → Strong client intent (ready to start project)
-* 70–89 → Clear interest but needs discussion
-* 40–69 → Possible lead, vague requirement
-* 0–39 → Not a lead / irrelevant
+If message is:
 
----
+Empty  
+Meaningless  
+Very short  
+Unclear intent  
+Contains only greeting  
 
-CATEGORY VALUES (STRICT):
-Use ONLY one of the following:
+Then:
 
-* Website
-* Web App
-* Mobile App
-* E-commerce
-* SEO
-* Digital Marketing
-* UI/UX
-* Media
-* Job/Internship
-* Spam
-* Other
+isRelevant = false  
+label = "IRRELEVANT"  
+category = "Other"  
+leadScore = 10  
 
 ---
 
-IMPORTANT OUTPUT RULES:
+LEAD SCORE GUIDELINES
 
-* Return ONLY valid JSON
-* No explanations outside JSON
-* Do NOT include markdown
-* Do NOT change structure
-* Ensure all fields are present
+90–100
+
+Strong buyer intent  
+Ready to start project  
+Mentions budget or timeline  
+
+70–89
+
+Clear requirement  
+Needs discussion  
+
+40–69
+
+Possible lead  
+Requirement unclear  
+
+0–39
+
+Not a real lead  
+
+---
+
+CATEGORY VALUES (STRICT)
+
+Use ONLY one:
+
+Website
+Web App
+Mobile App
+E-commerce
+SEO
+Digital Marketing
+UI/UX
+Media
+Job/Internship
+Spam
+Other
+
+---
+
+CATEGORY MAPPING RULES
+
+Website:
+
+Landing page
+Business website
+Portfolio website
+Company website
+Static website
+React website
+WordPress website
+Website maintenance
+AMC
+
+Web App:
+
+Dashboard
+CRM
+ERP
+Admin panel
+Web platform
+Portal
+Custom system
+PHP backend
+API development
+
+Mobile App:
+
+Android app
+iOS app
+Flutter app
+
+E-commerce:
+
+Shopify
+WooCommerce
+WordPress
+Online store
+Shopping website
+Product selling website
+
+SEO:
+
+SEO
+AEO
+GEO
+Search ranking
+Website optimization
+
+Digital Marketing:
+
+Ads
+Google Ads
+Social media marketing
+Facebook Ads
+Instagram marketing
+
+UI/UX:
+
+App design
+Website design
+Figma design
+Wireframes
+Prototype
+UI design
+UX design
+
+Media:
+
+Video editing
+Graphic design
+Logo design
+Branding
+Corporate photography
+Creative design
+
+Job/Internship:
+
+Resume submission
+Looking for job
+Internship request
+
+Spam:
+
+Promotions
+Advertising messages
+Irrelevant marketing
+
+---
+
+IMPORTANT OUTPUT RULES
+
+Return ONLY valid JSON
+
+No markdown  
+No explanation  
+No comments  
+No extra text  
+No trailing commas  
+
+Always include ALL fields
+
+leadScore must be integer between 0 and 100
+
+reason must be maximum 15 words
 
 ---
 
 Batch Input:
+
 ${enquiriesData}
 
 ---
 
 Return format:
+
 {
-"results": [
-{
-"entryId": number,
-"isRelevant": boolean,
-"label": "RELEVANT" | "IRRELEVANT",
-"category": "One from allowed list",
-"leadScore": number,
-"reason": "Max 15 words"
-}
-]
+  "results": [
+    {
+      "entryId": number,
+      "isRelevant": boolean,
+      "label": "RELEVANT" | "IRRELEVANT",
+      "category": "Allowed category only",
+      "leadScore": number,
+      "reason": "Max 15 words"
+    }
+  ]
 }
 
 `;
-
     let text;
     if (isOpenAIModel(model.model_id)) {
       text = await callOpenAI(model.api_key, model.model_id, prompt);
@@ -394,16 +605,26 @@ Return format:
     }
 
     const jsonResult = JSON.parse(text || '{"results":[]}');
+    
+    // Debug logging
+    console.log("AI Batch Analysis - Input enquiries count:", enquiries.length);
+    console.log("AI Batch Analysis - Raw AI response results count:", jsonResult.results?.length || 0);
+    
     const results = (jsonResult.results || []).map((res, i) => {
       // Find the corresponding enquiry either by entryId or fall back to array index
       const entryIdx = typeof res.entryId === "number" ? res.entryId : i;
       const originalEnquiry = enquiries[entryIdx];
       
+      // Debug logging for mapping issues
+      if (!originalEnquiry) {
+        console.warn(`AI Batch Analysis - Could not find enquiry for entryIdx: ${entryIdx}, fallback index: ${i}`);
+      }
+      
       const isRel = typeof res.isRelevant === "boolean" 
         ? res.isRelevant 
         : (res.label === "RELEVANT" || res.isRelevant === "true");
 
-      return {
+      const mappedResult = {
         id: originalEnquiry?.enquiry_id || originalEnquiry?.id || null,
         isRelevant: isRel,
         label: isRel ? "RELEVANT" : "IRRELEVANT",
@@ -411,9 +632,25 @@ Return format:
         leadScore: res.leadScore ?? (isRel ? 70 : 10),
         reason: res.reason || "Batch analysis completed",
       };
+      
+      console.log(`AI Batch Analysis - Mapped result ${i}:`, { 
+        entryId: res.entryId, 
+        mappedId: mappedResult.id,
+        category: mappedResult.category,
+        isRelevant: mappedResult.isRelevant 
+      });
+      
+      return mappedResult;
     });
+    
+    // Filter out results with null IDs (couldn't map to original enquiry)
+    const validResults = results.filter(r => r.id !== null);
+    
+    if (validResults.length !== results.length) {
+      console.warn(`AI Batch Analysis - Filtered out ${results.length - validResults.length} results with null IDs`);
+    }
 
-    res.json({ results });
+    res.json({ results: validResults });
   } catch (error) {
     console.error("Batch Analysis Error:", error);
     const retryInfo = parseRetryAfter(error);
