@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../middleware/upload");
+const { upload, handleMulterError } = require("../middleware/upload");
 
 const {
   getAllAdminUsers,
@@ -16,13 +16,14 @@ const { authenticateToken } = require("../middleware/authMiddleware");
 router.get("/admin-users", authenticateToken, getAllAdminUsers);
 
 // Create new admin user
-router.post("/admin-users", authenticateToken, upload.single("image"), createAdminUser);
+router.post("/admin-users", authenticateToken, upload.single("image"), handleMulterError, createAdminUser);
 
 // Update admin user
 router.post(
   "/admin-users/update/:uuid",
   authenticateToken,
   upload.single("image"),
+  handleMulterError,
   updateAdminUser,
 );
 

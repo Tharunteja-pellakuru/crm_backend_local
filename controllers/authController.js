@@ -59,10 +59,10 @@ const loginAdmin = (req, res) => {
 
     // Construct full image URL if image exists
     const imageUrl = user.image
-      ? `http://localhost:5000/uploads/admin/${user.image}`
+      ? `/uploads/admin/${user.image}`
       : null;
 
-    res.status(200).json({
+    res.status(200).json({  
       message: "Login successful",
       token,
       user: {
