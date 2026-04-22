@@ -40,7 +40,7 @@ const getAllAdminUsers = async (req, res) => {
         return res.status(500).json({ message: "Database error" });
       }
 
-      // Transform results to include full image URL and format status
+      // Transform results to include image path and format status
       const users = results.map((user) => ({
         ...user,
         status: user.status === 1 ? "Active" : "Inactive",
@@ -48,7 +48,7 @@ const getAllAdminUsers = async (req, res) => {
           ? user.joinDate.toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
         image: user.image
-          ? `${req.protocol}://${req.get("host")}/uploads/admin/${user.image}`
+          ? `/uploads/admin/${user.image}`
           : null,
       }));
 
@@ -154,14 +154,14 @@ const updateAdminUser = async (req, res) => {
           return res.status(500).json({ message: "Database error" });
         }
 
-        // Construct full image URL
-        const imageUrl = req.file
-          ? `${req.protocol}://${req.get("host")}/uploads/admin/${req.file.filename}`
+        // Return relative image path (or null if no new file)
+        const imagePath = req.file
+          ? `/uploads/admin/${req.file.filename}`
           : null;
 
         res.json({
           message: "Admin user updated successfully",
-          image: imageUrl,
+          image: imagePath,
         });
       },
     );
