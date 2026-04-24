@@ -305,7 +305,7 @@ const deleteClient = async (req, res) => {
       // Restore the previous status (Hot/Warm/Cold) or default to "Hot" if no previous status
       const updateLeadQuery = `
         UPDATE crm_tbl_leads 
-        SET lead_status = COALESCE(previous_lead_status, 'Hot'),
+        SET lead_status = 'Hot',
             previous_lead_status = NULL 
         WHERE lead_id = ?
       `;
