@@ -76,11 +76,28 @@ const createProject = async (req, res) => {
     const admin_id = req.user?.admin_id || null;
     const uuid = uuidv4();
 
+    // Determine lead_id: prioritize request body, fallback to client record
+    let lead_id = req.body.lead_id || null;
+    
+    if (!lead_id) {
+      try {
+        const [clientRows] = await pool.query(
+          "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?",
+          [client_id]
+        );
+        if (clientRows.length > 0) {
+          lead_id = clientRows[0].lead_id;
+        }
+      } catch (clientErr) {
+        console.error("Error fetching client lead_id in createProject:", clientErr.message);
+      }
+    }
+
     // Category is now managed at Project level only
     const effectiveCategory = project_category;
 
     const query =
-      "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+      "INSERT INTO crm_tbl_projects (uuid,project_name,project_description,project_category,project_status,project_priority,project_budget,onboarding_date,deadline_date,scope_document,client_id,lead_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     const [result] = await pool.query(query, [
       uuid,
@@ -94,6 +111,7 @@ const createProject = async (req, res) => {
       deadline_date,
       scope_document,
       client_id,
+      lead_id,
       admin_id,
     ]);
 

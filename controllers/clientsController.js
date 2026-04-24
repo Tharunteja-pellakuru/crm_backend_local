@@ -211,7 +211,7 @@ const convertLead = async (req, res) => {
 
       const projectUuid = uuidv4();
       const projectQuery =
-        "INSERT INTO crm_tbl_projects (uuid, project_name, project_description, project_category, project_status, project_priority, project_budget, onboarding_date, deadline_date, scope_document, client_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+        "INSERT INTO crm_tbl_projects (uuid, project_name, project_description, project_category, project_status, project_priority, project_budget, onboarding_date, deadline_date, scope_document, client_id, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
       await connection.query(projectQuery, [
         projectUuid,
@@ -225,6 +225,7 @@ const convertLead = async (req, res) => {
         deadline_date,
         scope_document || null,
         clientId,
+        lead_id,
         req.user.admin_id,
       ]);
     }

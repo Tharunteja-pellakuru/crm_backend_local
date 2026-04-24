@@ -552,6 +552,7 @@
             deadline_date DATE,
             scope_document VARCHAR(500),
             client_id INT,
+            lead_id INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_by INT NULL,
@@ -560,6 +561,11 @@
                 FOREIGN KEY (client_id)
                 REFERENCES crm_tbl_clients(client_id)
                 ON DELETE CASCADE
+                ON UPDATE CASCADE,
+            CONSTRAINT fk_project_lead
+                FOREIGN KEY (lead_id)
+                REFERENCES crm_tbl_leads(lead_id)
+                ON DELETE SET NULL
                 ON UPDATE CASCADE
           )`,
           "Projects Table Created",
@@ -568,18 +574,28 @@
       } else {
         const hasCreatedBy = columns.some(col => col.Field === 'created_by');
         const hasUpdatedBy = columns.some(col => col.Field === 'updated_by');
+        const hasLeadId = columns.some(col => col.Field === 'lead_id');
 
-        if (!hasCreatedBy || !hasUpdatedBy) {
-          console.log("Detected missing audit columns in crm_tbl_projects. Running migration...");
+        if (!hasCreatedBy || !hasUpdatedBy || !hasLeadId) {
+          console.log("Detected missing columns in crm_tbl_projects. Running migration...");
           
-          let alterQuery = "ALTER TABLE crm_tbl_projects ";
           let additions = [];
           if (!hasCreatedBy) additions.push("ADD COLUMN created_by INT NULL");
           if (!hasUpdatedBy) additions.push("ADD COLUMN updated_by INT NULL");
+          if (!hasLeadId) additions.push("ADD COLUMN lead_id INT NULL");
           
-          alterQuery += additions.join(", ");
+          const alterQuery = "ALTER TABLE crm_tbl_projects " + additions.join(", ");
           
-          await runQueryOn(conn, alterQuery, "Added audit columns to Projects", "Error adding audit columns to Projects:");
+          await runQueryOn(conn, alterQuery, "Updated Projects table structure", "Error updating Projects table:");
+
+          if (!hasLeadId) {
+            // Add FK for lead_id if we just added the column
+            await runQueryOn(conn, 
+              "ALTER TABLE crm_tbl_projects ADD CONSTRAINT fk_project_lead FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE SET NULL ON UPDATE CASCADE",
+              "Added lead_id FK to Projects",
+              "Error adding lead_id FK to Projects:"
+            );
+          }
         } else {
           console.log("Projects table is up to date.");
         }
