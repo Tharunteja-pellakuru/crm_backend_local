@@ -482,7 +482,7 @@
             client_country VARCHAR(100),
             client_state VARCHAR(100) DEFAULT '',
             client_currency VARCHAR(10),
-            client_status ENUM('Active', 'Inactive') DEFAULT 'Active',
+            client_status ENUM('Active', 'Inactive', 'Dismissed') DEFAULT 'Active',
             lead_id INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -513,8 +513,12 @@
           
           await runQueryOn(conn, alterQuery, "Added audit columns to Clients", "Error adding audit columns to Clients:");
         } else {
-          console.log("Clients table is up to date.");
+          console.log("Clients table audit columns are up to date.");
         }
+
+        // Alter ENUM to include Dismissed
+        console.log("Ensuring client_status ENUM includes Dismissed...");
+        await runQueryOn(conn, "ALTER TABLE crm_tbl_clients MODIFY COLUMN client_status ENUM('Active', 'Inactive', 'Dismissed') DEFAULT 'Active'", "Updated client_status ENUM", "Error updating client_status ENUM:");
       }
     } catch (e) {
       console.error("Error in createClientsTable:", e);

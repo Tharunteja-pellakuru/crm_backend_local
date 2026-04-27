@@ -23,7 +23,7 @@ const createClient = async (req, res) => {
       client_country: { required: true },
       client_state: { required: true },
       client_currency: { required: true },
-      client_status: { required: true, enum: ["Active", "Inactive", "On Hold", "Completed", "Dropped"] },
+      client_status: { required: true, enum: ["Active", "Inactive", "Dismissed"] },
       lead_id: { required: true },
     });
 
@@ -86,13 +86,13 @@ const updateClient = async (req, res) => {
       client_status,
     } = req.body;
 
-    const error = validateRequest(req.body, {
+    const error = validateRequest(req.body, {   
       organisation_name: { required: true },
       client_name: { required: true },
       client_country: { required: true },
       client_state: { required: false },
       client_currency: { required: true },
-      client_status: { required: true, enum: ["Active", "Inactive"] },
+      client_status: { required: true, enum: ["Active", "Inactive", "Dismissed"] },
     });
 
     if (error) {
