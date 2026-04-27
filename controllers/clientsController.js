@@ -284,15 +284,28 @@ const deleteClient = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // First, get the lead_id associated with this client
+    // First, get the lead_id associated directly with this client
     const [clientRows] = await pool.query(
       "SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?",
       [id]
     );
 
-    const leadId = clientRows.length > 0 ? clientRows[0].lead_id : null;
+    const clientLeadId = clientRows.length > 0 ? clientRows[0].lead_id : null;
 
-    // Delete the client
+    // Next, get all lead_ids associated with projects of this client
+    const [projectRows] = await pool.query(
+      "SELECT lead_id FROM crm_tbl_projects WHERE client_id = ? AND lead_id IS NOT NULL",
+      [id]
+    );
+
+    // Collect all unique lead IDs
+    const leadIds = new Set();
+    if (clientLeadId) leadIds.add(clientLeadId);
+    projectRows.forEach(row => leadIds.add(row.lead_id));
+    
+    const uniqueLeadIds = Array.from(leadIds);
+
+    // Delete the client (Projects will be cascade deleted)
     const query = "DELETE FROM crm_tbl_clients WHERE client_id = ?";
     const [result] = await pool.query(query, [id]);
 
@@ -300,16 +313,16 @@ const deleteClient = async (req, res) => {
       return res.status(404).json({ message: "Client Not Found!" });
     }
 
-    // If there was an associated lead, restore its previous status
-    if (leadId) {
-      // Restore the previous status (Hot/Warm/Cold) or default to "Hot" if no previous status
+    // Restore the status of all associated leads
+    if (uniqueLeadIds.length > 0) {
+      const placeholders = uniqueLeadIds.map(() => '?').join(',');
       const updateLeadQuery = `
         UPDATE crm_tbl_leads 
-        SET lead_status = 'Hot',
+        SET lead_status = COALESCE(previous_lead_status, 'Hot'),
             previous_lead_status = NULL 
-        WHERE lead_id = ?
+        WHERE lead_id IN (${placeholders})
       `;
-      await pool.query(updateLeadQuery, [leadId]);
+      await pool.query(updateLeadQuery, uniqueLeadIds);
     }
 
     res.status(200).json({ message: "Client Deleted Successfully!" });
