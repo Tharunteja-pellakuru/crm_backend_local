@@ -305,6 +305,47 @@ const deleteClient = async (req, res) => {
     
     const uniqueLeadIds = Array.from(leadIds);
 
+    // Find all projects for this client
+    const [clientProjects] = await pool.query(
+      "SELECT project_id FROM crm_tbl_projects WHERE client_id = ?",
+      [id]
+    );
+
+    if (clientProjects.length > 0) {
+      const projectIds = clientProjects.map(p => p.project_id);
+      const projectPlaceholders = projectIds.map(() => "?").join(",");
+
+      // 1. Get all followup_ids associated with these projects
+      const [followups] = await pool.query(
+        `SELECT followup_id FROM crm_tbl_followups WHERE project_id IN (${projectPlaceholders})`,
+        projectIds
+      );
+
+      // 2. Delete associated summaries first
+      if (followups.length > 0) {
+        const followupIds = followups.map((f) => f.followup_id);
+        const followupPlaceholders = followupIds.map(() => "?").join(",");
+        try { 
+          await pool.query(
+            `DELETE FROM crm_tbl_followUpSummary WHERE followup_id IN (${followupPlaceholders})`,
+            followupIds
+          );
+        } catch (summaryErr) {
+          console.error("Error deleting related follow-up summaries in deleteClient:", summaryErr.message);
+        }
+      }
+
+      // 3. Delete associated follow-ups for these projects
+      try {
+        await pool.query(
+          `DELETE FROM crm_tbl_followups WHERE project_id IN (${projectPlaceholders})`,
+          projectIds
+        );
+      } catch (followupErr) {
+        console.error("Error deleting related follow-ups in deleteClient:", followupErr.message);
+      }
+    }
+
     // Delete the client (Projects will be cascade deleted)
     const query = "DELETE FROM crm_tbl_clients WHERE client_id = ?";
     const [result] = await pool.query(query, [id]);
@@ -313,12 +354,12 @@ const deleteClient = async (req, res) => {
       return res.status(404).json({ message: "Client Not Found!" });
     }
 
-    // Restore the status of all associated leads
+    // Update the status of all associated leads to 'Dismissed'
     if (uniqueLeadIds.length > 0) {
       const placeholders = uniqueLeadIds.map(() => '?').join(',');
       const updateLeadQuery = `
         UPDATE crm_tbl_leads 
-        SET lead_status = COALESCE(previous_lead_status, 'Hot'),
+        SET lead_status = 'Dismissed',
             previous_lead_status = NULL 
         WHERE lead_id IN (${placeholders})
       `;
