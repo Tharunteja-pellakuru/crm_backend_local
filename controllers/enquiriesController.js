@@ -6,7 +6,15 @@ const pool = db.promise;
 
 const getEnquiries = async (req, res) => {
   try {
-    const query = `SELECT *, enquiry_id AS id FROM crm_tbl_enquiries ORDER BY enquiry_id DESC`;
+    const query = `
+      SELECT 
+        e.*,
+        e.enquiry_id AS id,
+        a.full_name AS created_by_name
+      FROM crm_tbl_enquiries e
+      LEFT JOIN crm_tbl_admins a ON e.created_by = a.admin_id
+      ORDER BY e.enquiry_id DESC
+    `;
     const [result] = await pool.query(query);
     res.status(200).json({ message: "Enquiries Fetched Successfully!", enquiries: result });
   } catch (err) {
@@ -14,6 +22,7 @@ const getEnquiries = async (req, res) => {
     res.status(500).json({ message: "Server Error!" });
   }
 };
+
 
 const addEnquiry = async (req, res) => {
   try {
@@ -23,6 +32,7 @@ const addEnquiry = async (req, res) => {
       email,
       phone_number,
       website_url,
+      source = "",
       message,
       status = "New",
       remarks = "",
@@ -31,8 +41,9 @@ const addEnquiry = async (req, res) => {
     // Validation
     const error = validateRequest(req.body, {
       full_name: { required: true, minLength: 2 },
-      email: { required: true, pattern: /^\S+@\S+\.\S+$/ },
+      email: { required: false, pattern: /^\S+@\S+\.\S+$/ },
       phone_number: { required: true, minLength: 10 },
+      source: { required: false },
     });
 
     if (error) {
@@ -40,7 +51,7 @@ const addEnquiry = async (req, res) => {
     }
 
     const admin_id = req.user?.admin_id || null;
-    const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, message, status, remarks, created_by) VALUES (?,?,?,?,?,?,?,?,?)`;
+    const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, source, message, status, remarks, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`;
 
     const [result] = await pool.query(query, [
       uuid,
@@ -48,15 +59,20 @@ const addEnquiry = async (req, res) => {
       email,
       phone_number,
       website_url,
+      source,
       message,
       status,
       remarks,
       admin_id,
     ]);
 
-    const [enquiries] = await pool.query("SELECT * FROM crm_tbl_enquiries WHERE enquiry_id = ?", [
-      result.insertId,
-    ]);
+    const [enquiries] = await pool.query(
+      `SELECT e.*, a.full_name AS created_by_name 
+       FROM crm_tbl_enquiries e 
+       LEFT JOIN crm_tbl_admins a ON e.created_by = a.admin_id 
+       WHERE e.enquiry_id = ?`,
+      [result.insertId]
+    );
 
     res.status(201).json({
       message: "Enquiry Created Successfully!",

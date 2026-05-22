@@ -611,26 +611,57 @@
     }
   };
 
-  const createEnquiriesTable = () => {
-    return runQuery(
-      `CREATE TABLE IF NOT EXISTS crm_tbl_enquiries (
-          enquiry_id INT PRIMARY KEY AUTO_INCREMENT,
-          uuid VARCHAR(100) UNIQUE NOT NULL,
-          full_name VARCHAR(250),
-          email VARCHAR(250),
-          phone_number VARCHAR(20),
-          website_url TEXT DEFAULT '',
-          message TEXT,
-          status ENUM('New', 'Hold', 'Dismissed', 'Converted') DEFAULT 'New',
-          remarks TEXT DEFAULT '',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          created_by INT NULL,
-          updated_by INT NULL
-      )`,
-      "Enquiries Table Created",
-      "Error Creating Enquiries Table:",
-    );
+  const createEnquiriesTable = async () => {
+    let conn;
+    try {
+      conn = await getConnection();
+      
+      const columns = await new Promise((resolve) => {
+        conn.query("SHOW COLUMNS FROM crm_tbl_enquiries", (err, cols) => {
+          if (err) resolve(null);
+          else resolve(cols);
+        });
+      });
+
+      if (!columns) {
+        await runQueryOn(conn,
+          `CREATE TABLE IF NOT EXISTS crm_tbl_enquiries (
+              enquiry_id INT PRIMARY KEY AUTO_INCREMENT,
+              uuid VARCHAR(100) UNIQUE NOT NULL,
+              full_name VARCHAR(250),
+              email VARCHAR(250),
+              phone_number VARCHAR(20),
+              website_url TEXT DEFAULT '',
+              source VARCHAR(100) DEFAULT '',
+              message TEXT,
+              status ENUM('New', 'Hold', 'Dismissed', 'Converted') DEFAULT 'New',
+              remarks TEXT DEFAULT '',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              created_by INT NULL,
+              updated_by INT NULL
+          )`,
+          "Enquiries Table Created",
+          "Error Creating Enquiries Table:"
+        );
+      } else {
+        const hasSource = columns.some(col => col.Field === 'source');
+        if (!hasSource) {
+          console.log("Detected missing 'source' column in crm_tbl_enquiries. Running migration...");
+          await runQueryOn(conn, 
+            "ALTER TABLE crm_tbl_enquiries ADD COLUMN source VARCHAR(100) DEFAULT ''", 
+            "Added 'source' column to crm_tbl_enquiries", 
+            "Error adding 'source' column to crm_tbl_enquiries:"
+          );
+        } else {
+          console.log("Enquiries table is up to date.");
+        }
+      }
+    } catch (e) {
+      console.error("Error in createEnquiriesTable:", e);
+    } finally {
+      if (conn) conn.release();
+    }
   };
 
   // Create all tables in correct order (sequential)
