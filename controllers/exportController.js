@@ -404,7 +404,7 @@ const exportFollowups = async (req, res) => {
     const workbook = await createExcelWorkbook(
       transformedData,
       headers,
-      "Follow-up Details",
+      "Follow-up Title",
       `CRM Follow-ups Export - ${typeTitle}`,
     );
 
