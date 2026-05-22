@@ -148,7 +148,8 @@
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_by INT NULL,
-            updated_by INT NULL
+            updated_by INT NULL,
+            converted_by INT NULL
           )`,
           "Leads Table Created",
           "Error Creating Leads Table:"
@@ -157,6 +158,7 @@
         const hasId = columns.some(col => col.Field === 'id');
         const hasLeadId = columns.some(col => col.Field === 'lead_id');
         const hasCreatedBy = columns.some(col => col.Field === 'created_by');
+        const hasConvertedBy = columns.some(col => col.Field === 'converted_by');
         const hasPreviousStatus = columns.some(col => col.Field === 'previous_lead_status');
 
         if (hasId && !hasLeadId) {
@@ -172,6 +174,9 @@
           // Add audit columns if missing
           if (!hasCreatedBy) {
             await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added audit columns", "Error adding audit columns:");
+          }
+          if (!hasConvertedBy) {
+            await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN converted_by INT NULL", "Added converted_by column", "Error adding converted_by column:");
           }
 
           // Add previous_lead_status column if missing
@@ -194,6 +199,9 @@
           // Table already uses lead_id - check for missing columns
           if (!hasCreatedBy) {
             await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN created_by INT NULL, ADD COLUMN updated_by INT NULL", "Added missing audit columns", "Error adding audit columns:");
+          }
+          if (!hasConvertedBy) {
+            await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN converted_by INT NULL", "Added missing converted_by column", "Error adding converted_by column:");
           }
           // Add previous_lead_status column if missing
           if (!hasPreviousStatus) {

@@ -170,4 +170,119 @@ const deleteEnquiry = async (req, res) => {
   }
 };
 
-module.exports = { getEnquiries, addEnquiry, updateEnquiryStatus, deleteEnquiry };
+const updateEnquiry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      full_name,
+      email,
+      phone_number,
+      website_url,
+      source,
+      message,
+      status,
+      remarks,
+    } = req.body;
+
+    // Validation
+    const error = validateRequest(req.body, {
+      full_name: { required: true, minLength: 2 },
+      email: { required: false, pattern: /^\S+@\S+\.\S+$/ },
+      phone_number: { required: true, minLength: 10 },
+      source: { required: false },
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    const admin_id = req.user?.admin_id || null;
+
+    // 1. Fetch current enquiry
+    const [rows] = await pool.query(
+      "SELECT * FROM crm_tbl_enquiries WHERE enquiry_id = ? OR uuid = ?",
+      [id, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Enquiry Not Found!" });
+    }
+
+    const currentEnquiry = rows[0];
+    const actualEnquiryId = currentEnquiry.enquiry_id;
+
+    // 2. Perform the update query
+    const updateQuery = `
+      UPDATE crm_tbl_enquiries 
+      SET 
+        full_name = ?, 
+        email = ?, 
+        phone_number = ?, 
+        website_url = ?, 
+        source = ?, 
+        message = ?, 
+        status = ?, 
+        remarks = ?, 
+        updated_by = ?
+      WHERE enquiry_id = ?
+    `;
+
+    await pool.query(updateQuery, [
+      full_name !== undefined ? full_name : currentEnquiry.full_name,
+      email !== undefined ? email : currentEnquiry.email,
+      phone_number !== undefined ? phone_number : currentEnquiry.phone_number,
+      website_url !== undefined ? website_url : currentEnquiry.website_url,
+      source !== undefined ? source : currentEnquiry.source,
+      message !== undefined ? message : currentEnquiry.message,
+      status !== undefined ? status : currentEnquiry.status,
+      remarks !== undefined ? remarks : currentEnquiry.remarks,
+      admin_id,
+      actualEnquiryId,
+    ]);
+
+    // 3. Fetch updated enquiry with admin name
+    const [enquiries] = await pool.query(
+      `SELECT e.*, a.full_name AS created_by_name 
+       FROM crm_tbl_enquiries e 
+       LEFT JOIN crm_tbl_admins a ON e.created_by = a.admin_id 
+       WHERE e.enquiry_id = ?`,
+      [actualEnquiryId]
+    );
+
+    // 4. Sync corresponding details to crm_tbl_leads if they were converted
+    try {
+      await pool.query(
+        `UPDATE crm_tbl_leads 
+         SET 
+           full_name = ?, 
+           phone_number = ?, 
+           email = ?, 
+           website_url = ?, 
+           message = ?,
+           updated_by = ?
+         WHERE enquiry_id = ?`,
+        [
+          full_name !== undefined ? full_name : currentEnquiry.full_name,
+          phone_number !== undefined ? phone_number : currentEnquiry.phone_number,
+          email !== undefined ? email : currentEnquiry.email,
+          website_url !== undefined ? website_url : currentEnquiry.website_url,
+          message !== undefined ? message : currentEnquiry.message,
+          admin_id,
+          actualEnquiryId,
+        ]
+      );
+    } catch (leadSyncErr) {
+      console.error("Error syncing lead details on enquiry update:", leadSyncErr.message);
+    }
+
+    res.status(200).json({
+      message: "Enquiry Updated Successfully!",
+      enquiry: enquiries[0],
+    });
+  } catch (err) {
+    console.error("Error updating enquiry:", err.message);
+    res.status(500).json({ message: "Server Error!" });
+  }
+};
+
+module.exports = { getEnquiries, addEnquiry, updateEnquiryStatus, deleteEnquiry, updateEnquiry };

@@ -164,9 +164,14 @@ const getLeads = async (req, res) => {
         c.organisation_name AS client_organisation,
         c.client_state AS client_state,
         c.client_country AS client_country,
-        c.client_currency AS client_currency
+        c.client_currency AS client_currency,
+        created_admin.full_name AS created_by_name,
+        converted_admin.full_name AS converted_by_name
       FROM crm_tbl_leads l
       LEFT JOIN crm_tbl_clients c ON l.lead_id = c.lead_id
+      LEFT JOIN crm_tbl_admins created_admin ON l.created_by = created_admin.admin_id
+      LEFT JOIN crm_tbl_admins converted_admin ON l.converted_by = converted_admin.admin_id
+      ORDER BY l.lead_id DESC
     `;
     const [result] = await pool.query(query);
     res.status(200).json({ message: "Leads Fetched Successfully!.", leads: result });

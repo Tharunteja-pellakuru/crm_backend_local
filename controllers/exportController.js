@@ -209,10 +209,12 @@ const exportLeads = async (req, res) => {
       l.created_at,
       l.updated_at,
       a1.full_name AS created_by_name,
+      a3.full_name AS converted_by_name,
       a2.full_name AS updated_by_name
     FROM crm_tbl_leads l
     LEFT JOIN crm_tbl_enquiries e ON l.enquiry_id = e.enquiry_id
     LEFT JOIN crm_tbl_admins a1 ON l.created_by = a1.admin_id
+    LEFT JOIN crm_tbl_admins a3 ON l.converted_by = a3.admin_id
     LEFT JOIN crm_tbl_admins a2 ON l.updated_by = a2.admin_id
     ORDER BY l.created_at DESC
   `;
@@ -240,6 +242,7 @@ const exportLeads = async (req, res) => {
       "Created Date": formatDateTime(row.created_at),
       "Updated Date": formatDateTime(row.updated_at),
       "Created By": row.created_by_name || "System",
+      "Converted By": row.converted_by_name || "-",
       "Updated By": row.updated_by_name || "-",
     }));
 

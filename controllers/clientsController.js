@@ -54,8 +54,8 @@ const createClient = async (req, res) => {
       try {
         // First, save the current lead status as previous_lead_status
         await pool.query(
-          "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted' WHERE lead_id = ?",
-          [lead_id]
+          "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted', converted_by = ? WHERE lead_id = ?",
+          [req.user.admin_id, lead_id]
         );
       } catch (leadErr) {
         console.error("Error updating lead status in createClient:", leadErr.message);
@@ -231,8 +231,8 @@ const convertLead = async (req, res) => {
     }
 
     // 3. Update Lead Status (save previous status before converting)
-    const updateLeadQuery = "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted' WHERE lead_id = ?";
-    await connection.query(updateLeadQuery, [lead_id]);
+    const updateLeadQuery = "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted', converted_by = ? WHERE lead_id = ?";
+    await connection.query(updateLeadQuery, [req.user.admin_id, lead_id]);
 
     // Commit transaction
     await connection.commit();
