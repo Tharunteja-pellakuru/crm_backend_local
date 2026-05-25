@@ -11,6 +11,24 @@ const capitalize = (s) => {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 };
 
+// Helper to safely format a MySQL DATETIME value to YYYY-MM-DDTHH:mm:ss string without timezone offset.
+const formatLocalDateTimeField = (dateVal) => {
+  if (!dateVal) return null;
+  if (typeof dateVal === "string") {
+    return dateVal.replace(" ", "T").split(".")[0];
+  }
+  if (dateVal instanceof Date) {
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const d = String(dateVal.getDate()).padStart(2, "0");
+    const hh = String(dateVal.getHours()).padStart(2, "0");
+    const mm = String(dateVal.getMinutes()).padStart(2, "0");
+    const ss = String(dateVal.getSeconds()).padStart(2, "0");
+    return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+  }
+  return dateVal;
+};
+
 // Helper to resolve lead_id from either lead_id or client_id
 const resolveLeadId = async (id) => {
   if (!id) return null;
@@ -132,12 +150,12 @@ const createNewFollowup = async (req, res) => {
       projectName: f.projectName,
       title: f.followup_title,
       description: f.followup_description,
-      dueDate: f.followup_datetime,
+      dueDate: formatLocalDateTimeField(f.followup_datetime),
       followup_mode: f.followup_mode,
       status: f.followup_status.toLowerCase(),
       priority: f.followup_priority,
       follow_brief: f.follow_brief,
-      completed_at: f.completed_at,
+      completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
     };
 
@@ -173,12 +191,12 @@ const getAllFollowups = async (req, res) => {
       projectName: f.projectName,
       title: f.followup_title,
       description: f.followup_description,
-      dueDate: f.followup_datetime,
+      dueDate: formatLocalDateTimeField(f.followup_datetime),
       followup_mode: f.followup_mode,
       status: f.followup_status.toLowerCase(),
       priority: f.followup_priority,
       follow_brief: f.follow_brief,
-      completed_at: f.completed_at,
+      completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
     }));
     res.status(200).json(transformedResults);
@@ -380,12 +398,12 @@ const getClientFollowups = async (req, res) => {
       projectName: f.projectName,
       title: f.followup_title,
       description: f.followup_description,
-      dueDate: f.followup_datetime,
+      dueDate: formatLocalDateTimeField(f.followup_datetime),
       followup_mode: f.followup_mode,
       status: f.followup_status.toLowerCase(),
       priority: f.followup_priority,
       follow_brief: f.follow_brief,
-      completed_at: f.completed_at,
+      completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
     }));
 
