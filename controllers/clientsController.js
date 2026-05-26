@@ -135,7 +135,8 @@ const getClients = async (req, res) => {
   try {
     const query = `
       SELECT 
-        c.*, 
+        c.*,
+        c.organisation_name as organisation_name, 
         c.client_id AS id,
         l.email, 
         l.phone_number AS phone,
