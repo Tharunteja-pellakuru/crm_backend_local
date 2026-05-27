@@ -45,6 +45,7 @@ const { authenticateToken } = require("./middleware/authMiddleware");
 
 /* Public Routes */
 app.use("/api", authRoutes); // /api/login
+app.use("/api", enquiriesRoutes); // Some routes like /add-enquiry are public
 
 // Test route to verify AI routes are working
 app.get("/api/test-routes", (req, res) => {
@@ -68,5 +69,4 @@ app.use("/api", leadsRoutes);
 app.use("/api", followUpsRoutes);
 app.use("/api", clientsRoutes);
 app.use("/api", projectsRoutes);
-app.use("/api", enquiriesRoutes);
 app.use("/api/export", exportRoutes);
