@@ -142,6 +142,7 @@
             lead_status VARCHAR(50),
             previous_lead_status VARCHAR(50) DEFAULT NULL,
             website_url TEXT,
+            source VARCHAR(255) DEFAULT NULL,
             message TEXT,
             country_code VARCHAR(20),
             enquiry_id INT DEFAULT NULL,
@@ -160,6 +161,7 @@
         const hasCreatedBy = columns.some(col => col.Field === 'created_by');
         const hasConvertedBy = columns.some(col => col.Field === 'converted_by');
         const hasPreviousStatus = columns.some(col => col.Field === 'previous_lead_status');
+        const hasSource = columns.some(col => col.Field === 'source');
 
         if (hasId && !hasLeadId) {
           console.log("Detected old 'id' column in crm_tbl_leads. Running migration...");
@@ -184,6 +186,10 @@
             await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN previous_lead_status VARCHAR(50) DEFAULT NULL", "Added previous_lead_status column", "Error adding previous_lead_status column:");
           }
 
+          if (!hasSource) {
+            await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN source VARCHAR(255) DEFAULT NULL", "Added source column", "Error adding source column:");
+          }
+
           // Re-add FK constraints pointing to the new column name
           await runQueryOn(conn,
             `ALTER TABLE crm_tbl_followups ADD CONSTRAINT crm_tbl_followups_ibfk_1 FOREIGN KEY (lead_id) REFERENCES crm_tbl_leads(lead_id) ON DELETE CASCADE`,
@@ -206,7 +212,12 @@
           // Add previous_lead_status column if missing
           if (!hasPreviousStatus) {
             await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN previous_lead_status VARCHAR(50) DEFAULT NULL", "Added previous_lead_status column", "Error adding previous_lead_status column:");
-          } else {
+          }
+          if (!hasSource) {
+            await runQueryOn(conn, "ALTER TABLE crm_tbl_leads ADD COLUMN source VARCHAR(255) DEFAULT NULL", "Added missing source column", "Error adding source column:");
+          }
+          
+          if (hasPreviousStatus && hasCreatedBy && hasConvertedBy && hasSource) {
             console.log("Leads table is up to date.");
           }
         }

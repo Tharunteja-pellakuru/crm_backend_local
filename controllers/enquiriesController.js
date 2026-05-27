@@ -259,6 +259,7 @@ const updateEnquiry = async (req, res) => {
            email = ?, 
            website_url = ?, 
            message = ?,
+           source = ?,
            updated_by = ?
          WHERE enquiry_id = ?`,
         [
@@ -267,6 +268,7 @@ const updateEnquiry = async (req, res) => {
           email !== undefined ? email : currentEnquiry.email,
           website_url !== undefined ? website_url : currentEnquiry.website_url,
           message !== undefined ? message : currentEnquiry.message,
+          source !== undefined ? source : currentEnquiry.source,
           admin_id,
           actualEnquiryId,
         ]
