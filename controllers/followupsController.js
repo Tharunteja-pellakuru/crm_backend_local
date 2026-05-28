@@ -132,10 +132,12 @@ const createNewFollowup = async (req, res) => {
     const queryEnriched = `
       SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
              p.project_name as projectName, p.client_id as mappedClientId,
-             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
+             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId,
+             a.full_name AS created_by_name
       FROM crm_tbl_followups f
       LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
       LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
+      LEFT JOIN crm_tbl_admins a ON f.created_by = a.admin_id
       WHERE f.followup_id = ?
     `;
     const [enrichedResults] = await pool.query(queryEnriched, [followupId]);
@@ -157,6 +159,7 @@ const createNewFollowup = async (req, res) => {
       follow_brief: f.follow_brief,
       completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
+      created_by_name: f.created_by_name,
     };
 
     res.status(201).json({
@@ -174,10 +177,12 @@ const getAllFollowups = async (req, res) => {
     const query = `
       SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
              p.project_name as projectName, p.client_id as mappedClientId,
-             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
+             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId,
+             a.full_name AS created_by_name
       FROM crm_tbl_followups f
       LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
       LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
+      LEFT JOIN crm_tbl_admins a ON f.created_by = a.admin_id
       ORDER BY f.followup_datetime ASC
     `;
     const [results] = await pool.query(query);
@@ -198,6 +203,7 @@ const getAllFollowups = async (req, res) => {
       follow_brief: f.follow_brief,
       completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
+      created_by_name: f.created_by_name,
     }));
     res.status(200).json(transformedResults);
   } catch (err) {
@@ -377,10 +383,12 @@ const getClientFollowups = async (req, res) => {
     const query = `
       SELECT f.*, s.conclusion_message as follow_brief, s.completed_at, s.completed_by, 
              p.project_name as projectName, p.client_id as mappedClientId,
-             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId
+             COALESCE(f.lead_id, (SELECT lead_id FROM crm_tbl_clients WHERE client_id = p.client_id)) as originalLeadId,
+             a.full_name AS created_by_name
       FROM crm_tbl_followups f
       LEFT JOIN crm_tbl_followUpSummary s ON f.followup_id = s.followup_id
       LEFT JOIN crm_tbl_projects p ON f.project_id = p.project_id
+      LEFT JOIN crm_tbl_admins a ON f.created_by = a.admin_id
       WHERE f.lead_id = ? 
          OR f.lead_id = (SELECT lead_id FROM crm_tbl_clients WHERE client_id = ?)
          OR f.project_id IN (SELECT project_id FROM crm_tbl_projects WHERE client_id = ?)
@@ -405,6 +413,7 @@ const getClientFollowups = async (req, res) => {
       follow_brief: f.follow_brief,
       completed_at: formatLocalDateTimeField(f.completed_at),
       completed_by: f.completed_by,
+      created_by_name: f.created_by_name,
     }));
 
     res.status(200).json(transformedResults);

@@ -32,9 +32,10 @@ const createLead = async (req, res) => {
       message,
       country_code,
       enquiry_id,
+      source,
     } = req.body;
 
-    console.log(full_name, phone_number, lead_status, website_url, email, message, country_code, enquiry_id);
+    console.log(full_name, phone_number, lead_status, website_url, email, message, country_code, enquiry_id, source);
 
     // Validation
     const error = validateRequest(req.body, {
@@ -57,7 +58,8 @@ const createLead = async (req, res) => {
       message,
       country_code,
       enquiry_id,
-      created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`;
+      source,
+      created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
 
     const sanitizedCode = sanitizeCountryCode(country_code);
     const [result] = await pool.query(query, [
@@ -70,6 +72,7 @@ const createLead = async (req, res) => {
       message,
       sanitizedCode,
       enquiry_id,
+      source || "",
       req.user.admin_id,
     ]);
 
@@ -115,6 +118,7 @@ const updateLead = async (req, res) => {
     const message = updateData.message || updateData.notes || updateData.projectDescription || currentLead.message;
     const website_url = updateData.website_url || updateData.website || currentLead.website_url;
     const country_code = sanitizeCountryCode(updateData.country_code || updateData.countryCode || currentLead.country_code);
+    const source = updateData.source !== undefined ? updateData.source : currentLead.source;
 
     const updateQuery = `UPDATE crm_tbl_leads SET 
       full_name = ?, 
@@ -124,6 +128,7 @@ const updateLead = async (req, res) => {
       message = ?, 
       website_url = ?,
       country_code = ?,
+      source = ?,
       updated_by = ?
       WHERE lead_id = ?;`;
 
@@ -135,6 +140,7 @@ const updateLead = async (req, res) => {
       message,
       website_url,
       country_code,
+      source,
       req.user.admin_id,
       actualLeadId,
     ]);

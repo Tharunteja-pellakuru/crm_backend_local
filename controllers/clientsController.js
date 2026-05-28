@@ -52,10 +52,9 @@ const createClient = async (req, res) => {
     // Update lead status if lead_id is provided
     if (lead_id) {
       try {
-        // First, save the current lead status as previous_lead_status
         await pool.query(
-          "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted', converted_by = ? WHERE lead_id = ?",
-          [req.user.admin_id, lead_id]
+          "UPDATE crm_tbl_leads SET lead_status = 'Converted', converted_by = ?, updated_by = ? WHERE lead_id = ?",
+          [req.user.admin_id, req.user.admin_id, lead_id]
         );
       } catch (leadErr) {
         console.error("Error updating lead status in createClient:", leadErr.message);
@@ -142,9 +141,11 @@ const getClients = async (req, res) => {
         l.phone_number AS phone,
         l.country_code AS country_code,
         l.website_url AS website,
-        l.message AS brief_message
+        l.message AS brief_message,
+        a.full_name AS created_by_name
       FROM crm_tbl_clients c
       LEFT JOIN crm_tbl_leads l ON c.lead_id = l.lead_id
+      LEFT JOIN crm_tbl_admins a ON c.created_by = a.admin_id
     `;
     const [result] = await pool.query(query);
     res.status(200).json(result);
@@ -231,9 +232,9 @@ const convertLead = async (req, res) => {
       ]);
     }
 
-    // 3. Update Lead Status (save previous status before converting)
-    const updateLeadQuery = "UPDATE crm_tbl_leads SET previous_lead_status = lead_status, lead_status = 'Converted', converted_by = ? WHERE lead_id = ?";
-    await connection.query(updateLeadQuery, [req.user.admin_id, lead_id]);
+    // 3. Update Lead Status
+    const updateLeadQuery = "UPDATE crm_tbl_leads SET lead_status = 'Converted', converted_by = ?, updated_by = ? WHERE lead_id = ?";
+    await connection.query(updateLeadQuery, [req.user.admin_id, req.user.admin_id, lead_id]);
 
     // Commit transaction
     await connection.commit();
@@ -360,11 +361,10 @@ const deleteClient = async (req, res) => {
       const placeholders = uniqueLeadIds.map(() => '?').join(',');
       const updateLeadQuery = `
         UPDATE crm_tbl_leads 
-        SET lead_status = 'Dismissed',
-            previous_lead_status = NULL 
+        SET lead_status = 'Dismissed', updated_by = ?
         WHERE lead_id IN (${placeholders})
       `;
-      await pool.query(updateLeadQuery, uniqueLeadIds);
+      await pool.query(updateLeadQuery, [req.user.admin_id, ...uniqueLeadIds]);
     }
 
     res.status(200).json({ message: "Client Deleted Successfully!" });
