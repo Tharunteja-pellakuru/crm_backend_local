@@ -15,6 +15,8 @@ const {
 
 const { authenticateToken } = require("../middleware/authMiddleware");
 
+const { chatWithAi } = require("../controllers/aiChatController");
+
 // AI Models routes
 router.get("/ai-models", authenticateToken, getAllAiModels);
 router.post("/ai-models", authenticateToken, createAiModel);
@@ -24,5 +26,8 @@ router.delete("/ai-models/:id", authenticateToken, deleteAiModel);
 // AI Analysis routes
 router.post("/ai/analyze-enquiry", authenticateToken, analyzeEnquiry);
 router.post("/ai/batch-analyze", authenticateToken, batchAnalyzeEnquiries);
+
+// AI Chat routes
+router.post("/ai/chat", authenticateToken, chatWithAi);
 
 module.exports = router;
