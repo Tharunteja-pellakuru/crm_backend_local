@@ -1,6 +1,8 @@
 const db = require("../config/db.js");
 const { v4: uuidv4 } = require("uuid");
 const { validateRequest } = require("../middleware/validation");
+const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("../middleware/authMiddleware");
 
 const pool = db.promise;
 
@@ -50,7 +52,18 @@ const addEnquiry = async (req, res) => {
       return res.status(400).json({ message: error.message });
     }
 
-    const admin_id = req.user?.admin_id || null;
+    let admin_id = null;
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        admin_id = decoded.admin_id;
+      } catch (err) {
+        // Ignore token errors, treat as unauthenticated
+      }
+    }
+
     const query = `INSERT INTO crm_tbl_enquiries (uuid, full_name, email, phone_number, website_url, source, message, status, remarks, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`;
 
     const [result] = await pool.query(query, [
