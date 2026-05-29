@@ -116,9 +116,13 @@ const createProject = async (req, res) => {
     ]);
 
     const projectId = result.insertId;
-    const [projects] = await pool.query("SELECT * FROM crm_tbl_projects WHERE project_id = ?", [
-      projectId,
-    ]);
+    const [projects] = await pool.query(
+      `SELECT p.*, a.full_name AS created_by_name 
+       FROM crm_tbl_projects p 
+       LEFT JOIN crm_tbl_admins a ON p.created_by = a.admin_id 
+       WHERE p.project_id = ?`, 
+      [projectId]
+    );
 
     res.status(201).json({
       message: "Project created successfully",
@@ -204,7 +208,13 @@ const updateProject = async (req, res) => {
     }
 
     // Fetch and return the updated project
-    const [projects] = await pool.query("SELECT * FROM crm_tbl_projects WHERE project_id = ?", [id]);
+    const [projects] = await pool.query(
+      `SELECT p.*, a.full_name AS created_by_name 
+       FROM crm_tbl_projects p 
+       LEFT JOIN crm_tbl_admins a ON p.created_by = a.admin_id 
+       WHERE p.project_id = ?`, 
+      [id]
+    );
 
     res.status(200).json({
       message: "Project Updated Successfully!",
@@ -218,7 +228,11 @@ const updateProject = async (req, res) => {
 
 const getProjects = async (req, res) => {
   try {
-    const query = "SELECT *, project_id AS id FROM crm_tbl_projects";
+    const query = `
+      SELECT p.*, p.project_id AS id, a.full_name AS created_by_name 
+      FROM crm_tbl_projects p
+      LEFT JOIN crm_tbl_admins a ON p.created_by = a.admin_id
+    `;
     const [result] = await pool.query(query);
     res.status(200).json(result.map(formatProjectDates));
   } catch (err) {
