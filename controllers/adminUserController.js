@@ -29,7 +29,7 @@ const getAllAdminUsers = async (req, res) => {
 
     query += ` ORDER BY 
       CASE 
-        WHEN role = 'Root Admin' THEN 0 
+        WHEN role = 'Administrator' THEN 0 
         ELSE 1 
       END, 
       created_at DESC`;
@@ -247,11 +247,11 @@ const deleteAdminUser = async (req, res) => {
 
       const user = results[0];
 
-      // Prevent deletion of Root Admin
-      if (user.role === "Root Admin") {
+      // Prevent deletion of Administrator
+      if (user.role === "Administrator") {
         return res
           .status(403)
-          .json({ message: "Root Admin cannot be deleted" });
+          .json({ message: "Administrator cannot be deleted" });
       }
 
       // Delete user from database

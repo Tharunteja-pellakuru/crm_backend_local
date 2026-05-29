@@ -87,7 +87,7 @@
               "Anand",
               defaultEmail,
               hashedPassword,
-              "Root Admin",
+              "Administrator",
               true,
               defaultImage,
             ],
