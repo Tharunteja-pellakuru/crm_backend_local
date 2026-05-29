@@ -665,11 +665,4 @@ Return format:
 module.exports = {
   analyzeEnquiry,
   batchAnalyzeEnquiries,
-  isOpenAIModel,
-  isAnthropicModel,
-  isGroqModel,
-  callClaude,
-  callGroq,
-  callOpenAI,
-  callGemini
 };
